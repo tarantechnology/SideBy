@@ -16,12 +16,29 @@ const KEY_TRANSPORT = 'sideby:transport';
 
 const perTab = location.pathname.startsWith('/mock');
 
+/**
+ * Session storage needs a grant from the service worker before content
+ * scripts may read it; if that is missing (old worker, race), fall back to
+ * local storage rather than failing to mount.
+ */
+let sessionUsable = true;
+async function area(): Promise<chrome.storage.StorageArea> {
+  if (sessionUsable && chrome.storage.session) {
+    try {
+      await chrome.storage.session.get('sideby:probe');
+      return chrome.storage.session;
+    } catch {
+      sessionUsable = false;
+    }
+  }
+  return chrome.storage.local;
+}
+
 async function get(key: string): Promise<string | null> {
   if (perTab) {
     try { return sessionStorage.getItem(key); } catch { return null; }
   }
-  const area = chrome.storage.session ?? chrome.storage.local;
-  const got = await area.get(key);
+  const got = await (await area()).get(key);
   const value = got[key];
   return typeof value === 'string' && value ? value : null;
 }
@@ -31,9 +48,9 @@ async function set(key: string, value: string | null): Promise<void> {
     try { value === null ? sessionStorage.removeItem(key) : sessionStorage.setItem(key, value); } catch { /* storage blocked */ }
     return;
   }
-  const area = chrome.storage.session ?? chrome.storage.local;
-  if (value === null) await area.remove(key);
-  else await area.set({ [key]: value });
+  const store = await area();
+  if (value === null) await store.remove(key);
+  else await store.set({ [key]: value });
 }
 
 export interface StoredRoom {

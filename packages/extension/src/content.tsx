@@ -76,8 +76,14 @@ async function mount() {
     }
   }, true);
 
-  chrome.runtime.onMessage.addListener((msg: { type?: string }) => {
-    if (msg?.type === 'sideby:toggle') bus.dispatchEvent(new Event('toggle-card'));
+  // The toolbar may ask for the card before the UI has rendered (we still
+  // await storage below); remember the ask and honour it on first render.
+  let rendered = false;
+  let openOnRender = false;
+  chrome.runtime.onMessage.addListener((msg: { type?: string; open?: boolean }) => {
+    if (msg?.type !== 'sideby:toggle') return;
+    if (!rendered) { openOnRender = true; return; }
+    bus.dispatchEvent(new Event(msg.open ? 'open-card' : 'toggle-card'));
   });
 
   // Long-lived port: tells the service worker this tab has the overlay, and
@@ -248,6 +254,8 @@ async function mount() {
     />,
   );
   render();
+  rendered = true;
+  if (openOnRender || hangout) queueMicrotask(() => bus.dispatchEvent(new Event('open-card')));
   if (__DEV__) console.info('[sideby] overlay mounted as', memberId, hangout ? '(hangout)' : `(${contentPrefix})`);
 
   // Arriving via an invite link? Remember it before the page redirects us anywhere.
@@ -308,5 +316,6 @@ async function mount() {
   });
 }
 
-if (document.body) void mount();
-else document.addEventListener('DOMContentLoaded', () => void mount(), { once: true });
+const boot = () => mount().catch((err) => console.error('[sideby] overlay failed to mount', err));
+if (document.body) void boot();
+else document.addEventListener('DOMContentLoaded', () => void boot(), { once: true });

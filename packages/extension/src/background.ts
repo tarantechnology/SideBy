@@ -11,10 +11,12 @@ import { serviceForUrl } from './adapters/services.js';
 declare const __DEV__: boolean;
 declare const __SERVER_HTTP__: string;
 
-// Content scripts read the session-scoped room and identity.
-void (chrome.storage.session as { setAccessLevel?: (o: { accessLevel: string }) => Promise<void> } | undefined)
-  ?.setAccessLevel?.({ accessLevel: 'TRUSTED_AND_UNTRUSTED_CONTEXTS' })
-  .catch(() => undefined);
+// Content scripts read the session-scoped room and identity; nothing may be
+// injected before this grant lands or the first storage read would throw.
+const sessionReady: Promise<void> = Promise.resolve(
+  (chrome.storage.session as { setAccessLevel?: (o: { accessLevel: string }) => Promise<void> } | undefined)
+    ?.setAccessLevel?.({ accessLevel: 'TRUSTED_AND_UNTRUSTED_CONTEXTS' }),
+).then(() => undefined, () => undefined);
 
 /** Tabs with a mounted overlay, by their long-lived port. */
 const mounted = new Set<number>();
@@ -31,15 +33,19 @@ chrome.runtime.onConnect.addListener((port) => {
 chrome.action.onClicked.addListener(async (tab) => {
   const tabId = tab.id;
   if (tabId === undefined) return;
-  const toggle = () => chrome.tabs.sendMessage(tabId, { type: 'sideby:toggle' }).catch(() => undefined);
+  // Already mounted (or should be, on a service page): just toggle the card.
   if (mounted.has(tabId) || (tab.url && serviceForUrl(tab.url))) {
-    await toggle();
-    return;
+    const delivered = await chrome.tabs.sendMessage(tabId, { type: 'sideby:toggle', open: true }).then(() => true, () => false);
+    if (delivered) return;
+    // A service page whose content script is gone (extension reloaded under it): inject below.
   }
+  await sessionReady;
   try {
     await chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] });
-    setTimeout(() => void toggle(), 400);
-  } catch {
+    // The content script opens its card on mount when told to; a late toggle is harmless.
+    setTimeout(() => void chrome.tabs.sendMessage(tabId, { type: 'sideby:toggle', open: true }).catch(() => undefined), 300);
+  } catch (err) {
+    console.warn('[sideby] cannot inject here, opening the lobby', err);
     await chrome.tabs.create({ url: `${__SERVER_HTTP__}/join` });
   }
 });
