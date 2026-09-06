@@ -39,12 +39,14 @@ function mount() {
   const adapter = new AdapterProxy();
   const bus = new EventTarget();
 
+  // Capture phase: Netflix's player stops keydown propagation at the document.
   window.addEventListener('keydown', (e) => {
     if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.code === 'KeyD') {
       e.preventDefault();
+      e.stopPropagation();
       bus.dispatchEvent(new Event('toggle-debug'));
     }
-  });
+  }, true);
 
   chrome.runtime.onMessage.addListener((msg: { type?: string }) => {
     if (msg?.type === 'sideby:toggle') bus.dispatchEvent(new Event('toggle-debug'));
