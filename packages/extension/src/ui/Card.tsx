@@ -1,10 +1,11 @@
-import { Check, ChevronRight, Copy, Link2, LogOut, Mic, MicOff, Play, Video, VideoOff, Volume1, Volume2, VolumeX, X } from 'lucide-react';
+import { Check, ChevronRight, Copy, Link2, LogOut, Mic, MicOff, Pause, Play, RotateCcw, RotateCw, Video, VideoOff, Volume1, Volume2, VolumeX, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { Readiness } from '@sideby/shared';
 import type { VideoAdapter } from '../adapters/VideoAdapter.js';
 import type { PeerCall } from '../rtc/PeerCall.js';
 import type { SyncEngine, SyncSnapshot } from '../sync/SyncEngine.js';
 import { AdvancedPanel } from './AdvancedPanel.js';
+import { formatClock } from './format.js';
 import type { AdapterView } from './useAdapter.js';
 import { useCall } from './useCall.js';
 
@@ -16,6 +17,7 @@ interface Props {
   call: PeerCall | null;
   inviteLink: string | null;
   unavailable: boolean;
+  blocked: 'concurrent' | null;
   advancedOpen: boolean;
   onToggleAdvanced: () => void;
   onInvite: () => void;
@@ -26,38 +28,44 @@ interface Props {
   onTransportChange: (kind: 'local' | 'ws') => void;
 }
 
+const SKIP_MS = 10_000;
+
 /**
  * The one surface a viewer sees. Invite → friend joins → both ready →
- * start together. One volume for the movie and the friend. Advanced folds
- * away everything else.
+ * start together. Then transport controls, two volumes, camera, leave.
+ * Advanced folds away diagnostics.
  */
 export function Card(props: Props) {
-  const { view, sync, engine, call, inviteLink, unavailable, advancedOpen, onToggleAdvanced, onInvite, onLeave, onClose } = props;
+  const { view, sync, engine, call, adapter, inviteLink, unavailable, blocked, advancedOpen, onToggleAdvanced, onInvite, onLeave, onClose } = props;
   const inRoom = sync.roomId !== null;
   return (
     <div className="sb-card sb-material">
       <div className="sb-card__head">
         <span className="sb-card__title">{inRoom ? 'Watching together' : 'Watch together'}</span>
-        <button className="sb-pill__btn" onClick={onClose} title="Close"><X size={14} /></button>
+        <button className="sb-iconbtn" onClick={onClose} title="Close"><X size={14} /></button>
       </div>
+
+      {blocked === 'concurrent' && (
+        <p className="sb-card__warn">Netflix is already playing on this account in another tab or browser. Close it, then reload this page.</p>
+      )}
 
       {!inRoom ? (
         <>
           <p className="sb-card__text">Invite a friend. Their camera floats over the movie, and you both control one shared playhead.</p>
-          <button className="sb-btn sb-btn--on sb-btn--lg" disabled={!view.state.contentId} onClick={onInvite}>
+          <button className="sb-btn sb-btn--primary sb-btn--lg" disabled={!view.state.contentId} onClick={onInvite}>
             <Link2 size={14} />Invite a friend
           </button>
           {!view.state.contentId && <p className="sb-card__hint">Open a movie or episode first.</p>}
         </>
       ) : (
-        <RoomBody view={view} sync={sync} engine={engine} call={call} adapter={props.adapter} inviteLink={inviteLink} unavailable={unavailable} onLeave={onLeave} />
+        <RoomBody view={view} sync={sync} engine={engine} call={call} adapter={adapter} inviteLink={inviteLink} unavailable={unavailable} onLeave={onLeave} />
       )}
 
       <button className={`sb-disclosure${advancedOpen ? ' sb-disclosure--open' : ''}`} onClick={onToggleAdvanced} aria-expanded={advancedOpen}>
         <ChevronRight size={13} className="sb-disclosure__chev" />Advanced
       </button>
       {advancedOpen && (
-        <AdvancedPanel adapter={props.adapter} view={view} engine={engine} onJoin={props.onJoin} onLeave={onLeave} transportKind={props.transportKind} onTransportChange={props.onTransportChange} />
+        <AdvancedPanel adapter={adapter} view={view} engine={engine} onJoin={props.onJoin} onLeave={onLeave} transportKind={props.transportKind} onTransportChange={props.onTransportChange} />
       )}
     </div>
   );
@@ -83,18 +91,23 @@ function RoomBody({ view, sync, engine, call, adapter, inviteLink, unavailable, 
   const peerReady = peer?.readiness;
   const bothReady = !!peer?.connected && me.contentMatch && me.playerReady && !!peerReady?.contentMatch && !!peerReady?.playerReady;
   const counting = sync.startsInMs > 0;
-  // Only offer a coordinated start while the shared movie is stopped.
-  const canStart = bothReady && !sync.roomPlaying && !counting;
-  const resume = (sync.timeline?.anchorMediaMs ?? 0) > 2000;
+  const started = sync.roomPlaying || (sync.timeline?.anchorMediaMs ?? 0) > 2000 || (sync.timeline?.revision ?? 0) > 3;
+  // A coordinated start is offered once, before anything has played. After
+  // that the shared movie is driven by the transport controls below.
+  const offerStart = bothReady && !started && !counting;
+  const state = view.state;
+  const ready = view.connected && state.ready;
+  const run = (fn: () => Promise<void>) => () => { fn().catch(() => undefined); };
 
   return (
     <>
       {inviteLink && (
         <button className={`sb-linkrow${copied ? ' sb-linkrow--copied' : ''}`} onClick={() => void copy()} title="Copy invite link">
-          <span className="sb-linkrow__url sb-mono">{inviteLink.replace('https://www.', '')}</span>
+          <span className="sb-linkrow__url">{inviteLink.replace('https://www.', '')}</span>
           <span className="sb-linkrow__icon">{copied ? <Check size={14} /> : <Copy size={14} />}</span>
         </button>
       )}
+
       <div className="sb-people">
         <Person label="You" readiness={me} connected unavailable={unavailable} />
         <Person label="Friend" readiness={peerReady} connected={!!peer?.connected} present={!!peer} />
@@ -102,21 +115,38 @@ function RoomBody({ view, sync, engine, call, adapter, inviteLink, unavailable, 
       {unavailable && <p className="sb-card__warn">This title isn’t available on your Netflix plan or region. Sideby can’t work around that, but you can pick another title together.</p>}
       {sync.contentMismatch && !unavailable && <p className="sb-card__hint">Taking you to the right title…</p>}
 
-      {(canStart || counting) && (
-        <button className="sb-btn sb-btn--on sb-btn--lg" style={{ marginTop: 10 }} disabled={counting} onClick={() => engine.startTogether(3000)}>
-          <Play size={13} />{counting ? 'Starting…' : resume ? 'Resume together' : 'Start together'}
+      {(offerStart || counting) && (
+        <button className="sb-btn sb-btn--primary sb-btn--lg" style={{ marginTop: 12 }} disabled={counting} onClick={() => engine.startTogether(3000)}>
+          <Play size={13} />{counting ? 'Starting…' : 'Start together'}
         </button>
       )}
-      {sync.roomPlaying && !counting && <p className="sb-card__hint" style={{ marginTop: 10 }}>Playing in sync. Use Netflix’s controls as usual; your friend follows.</p>}
+
+      <div className="sb-transport" style={{ marginTop: 12 }}>
+        <button className="sb-btn sb-btn--icon" disabled={!ready} onClick={run(() => adapter.seek(state.currentTimeMs - SKIP_MS))} title="Back 10 seconds"><RotateCcw size={15} /></button>
+        <button className="sb-btn sb-btn--icon sb-btn--main" disabled={!ready} onClick={run(() => (state.playing ? adapter.pause() : adapter.play()))} title={state.playing ? 'Pause for both' : 'Play for both'}>
+          {state.playing ? <Pause size={18} /> : <Play size={18} />}
+        </button>
+        <button className="sb-btn sb-btn--icon" disabled={!ready} onClick={run(() => adapter.seek(state.currentTimeMs + SKIP_MS))} title="Forward 10 seconds"><RotateCw size={15} /></button>
+        <span className="sb-transport__time">{formatClock(state.currentTimeMs).replace(/\.\d$/, '')}<span className="sb-transport__status"> · {syncWord(sync, peer?.connected ?? false)}</span></span>
+      </div>
 
       <VolumeRows view={view} adapter={adapter} call={call} />
 
-      <div className="sb-row" style={{ marginTop: 10 }}>
+      <div className="sb-row" style={{ marginTop: 12 }}>
         {call && <CallButtons call={call} />}
-        <button className="sb-btn" style={{ flex: '0 0 auto', marginLeft: 'auto' }} onClick={onLeave} title="Leave"><LogOut size={13} />Leave</button>
+        <button className="sb-btn" style={{ marginLeft: 'auto', flex: '0 0 auto' }} onClick={onLeave} title="Leave the room"><LogOut size={13} />Leave</button>
       </div>
     </>
   );
+}
+
+function syncWord(sync: SyncSnapshot, peerConnected: boolean): string {
+  if (!peerConnected) return 'waiting for friend';
+  if (sync.startsInMs > 0) return `starting in ${Math.ceil(sync.startsInMs / 1000)}`;
+  if ((sync.timeline?.holds.length ?? 0) > 0) return 'waiting for buffer';
+  if (sync.correction === 'seek') return 'resyncing';
+  if (sync.correction !== 'none') return 'catching up';
+  return sync.roomPlaying ? 'in sync' : 'paused together';
 }
 
 /** Two sliders: what you hear of the movie, and what you hear of your friend. */
@@ -139,7 +169,7 @@ function VolumeRow({ label, value, disabled = false, onChange }: { label: string
       <span className="sb-volume__label">{label}</span>
       <Icon size={14} className="sb-volume__icon" />
       <input className="sb-slider" type="range" min={0} max={100} value={value} disabled={disabled} onChange={(e) => onChange(Number(e.target.value))} aria-label={`${label} volume`} />
-      <span className="sb-volume__val sb-mono">{value}</span>
+      <span className="sb-volume__val">{value}</span>
     </label>
   );
 }

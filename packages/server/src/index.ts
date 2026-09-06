@@ -1,5 +1,8 @@
 /** Sideby room server: HTTP health + WebSocket room protocol. */
+import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { RoomService } from './RoomService.js';
 import { MemoryRoomStore } from './RoomStore.js';
@@ -13,7 +16,14 @@ const ICE_SERVERS = process.env.ICE_SERVERS_JSON
 const store = new MemoryRoomStore();
 const service = new RoomService(store, () => Date.now(), ICE_SERVERS);
 
+const MOCK_PAGE = join(dirname(fileURLToPath(import.meta.url)), '../../../dev/mock-player/index.html');
+
 const server = createServer((req, res) => {
+  if (req.url?.startsWith('/mock')) {
+    res.setHeader('content-type', 'text/html; charset=utf-8');
+    res.end(readFileSync(MOCK_PAGE));
+    return;
+  }
   if (req.url === '/health') {
     res.setHeader('content-type', 'application/json');
     res.end(JSON.stringify({ ok: true, now: Date.now(), rooms: [...store.all()].length }));

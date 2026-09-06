@@ -35,6 +35,7 @@ const common = {
 
 const entries = [
   { in: 'src/adapters/netflix/main.ts', out: 'netflix-main' },
+  { in: 'src/adapters/mock/main.ts', out: 'mock-main' },
   { in: 'src/content.tsx', out: 'content' },
   { in: 'src/background.ts', out: 'background' },
 ];

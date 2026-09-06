@@ -17,7 +17,6 @@
   --sb-shadow: 0 8px 30px rgba(0, 0, 0, 0.45), 0 1px 0 rgba(255, 255, 255, 0.04) inset;
   --sb-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --sb-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", Inter, sans-serif;
-  --sb-mono: ui-monospace, "SF Mono", Menlo, monospace;
   font-family: var(--sb-font);
   color: var(--sb-text);
   font-size: 13px;
@@ -101,10 +100,11 @@
   display: flex; align-items: center; justify-content: space-between;
   margin-bottom: 8px;
 }
-.sb-panel__title { font-size: 12px; font-weight: 600; color: var(--sb-text-2); letter-spacing: 0.02em; text-transform: uppercase; }
+.sb-panel__title { font-size: 11px; font-weight: 600; color: var(--sb-text-2); letter-spacing: 0.04em; text-transform: uppercase; }
+.sb-panel__aside { font-size: 11px; color: var(--sb-text-3); font-variant-numeric: tabular-nums; }
 .sb-kv { display: grid; grid-template-columns: 96px 1fr; row-gap: 5px; column-gap: 8px; font-size: 12px; }
 .sb-kv dt { color: var(--sb-text-2); margin: 0; }
-.sb-kv dd { margin: 0; font-family: var(--sb-mono); font-variant-numeric: tabular-nums; color: var(--sb-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sb-kv dd { margin: 0; font-variant-numeric: tabular-nums; color: var(--sb-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sb-kv dd.sb-ok { color: var(--sb-success); }
 .sb-kv dd.sb-warn { color: var(--sb-warning); }
 .sb-kv dd.sb-bad { color: var(--sb-danger); }
@@ -126,12 +126,12 @@
 }
 .sb-btn:hover { background: rgba(255, 255, 255, 0.10); }
 .sb-btn:active { transform: scale(0.97); }
-.sb-btn--on { background: var(--sb-accent); border-color: transparent; color: white; }
-.sb-btn--on:hover { background: #2a94ff; }
+.sb-btn--on, .sb-btn--primary { background: var(--sb-accent); border-color: transparent; color: white; }
+.sb-btn--on:hover, .sb-btn--primary:hover { background: #2a94ff; }
 .sb-btn:disabled { opacity: 0.4; cursor: default; }
-.sb-mono { font-family: var(--sb-mono); font-variant-numeric: tabular-nums; }
+.sb-mono { font-variant-numeric: tabular-nums; }
 .sb-muted { color: var(--sb-text-2); }
-.sb-log { margin-top: 8px; max-height: 96px; overflow: auto; font-family: var(--sb-mono); font-size: 10.5px; color: var(--sb-text-2); line-height: 1.45; }
+.sb-log { margin-top: 8px; max-height: 96px; overflow: auto; font-variant-numeric: tabular-nums; font-size: 11px; color: var(--sb-text-2); line-height: 1.45; }
 .sb-log div { white-space: nowrap; }
 
 /* --------------------------------------------------------------- inputs */
@@ -304,3 +304,32 @@
   transition: transform 120ms var(--sb-ease);
 }
 .sb-slider:active::-webkit-slider-thumb { transform: scale(1.1); }
+
+/* ------------------------------------------------------ transport row */
+.sb-transport { display: flex; align-items: center; gap: 6px; }
+.sb-btn--main { width: 42px; height: 36px; background: rgba(255, 255, 255, 0.12); }
+.sb-btn--main:hover { background: rgba(255, 255, 255, 0.18); }
+.sb-transport__time { margin-left: 8px; font-size: 12px; color: var(--sb-text); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sb-transport__status { color: var(--sb-text-2); }
+.sb-iconbtn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; border-radius: 999px;
+  color: var(--sb-text-2); background: transparent; border: 0; cursor: pointer;
+  transition: background 160ms var(--sb-ease), color 160ms var(--sb-ease);
+}
+.sb-iconbtn:hover { background: var(--sb-highlight); color: var(--sb-text); }
+
+/* ----------------------------------------------------------- advanced */
+.sb-section + .sb-section { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--sb-border); }
+.sb-segmented {
+  display: flex; padding: 2px; border-radius: var(--sb-radius-sm);
+  background: rgba(0, 0, 0, 0.3); border: 1px solid var(--sb-border);
+}
+.sb-segmented button {
+  flex: 1; height: 24px; border: 0; border-radius: 7px; background: transparent;
+  color: var(--sb-text-2); font: inherit; font-size: 12px; font-weight: 500; cursor: pointer;
+  font-variant-numeric: tabular-nums; transition: background 140ms var(--sb-ease), color 140ms var(--sb-ease);
+}
+.sb-segmented button:disabled { opacity: 0.4; cursor: default; }
+.sb-segmented .sb-segmented__on { background: rgba(255, 255, 255, 0.14); color: var(--sb-text); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3); }
+.sb-field__label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

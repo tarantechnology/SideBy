@@ -64,11 +64,18 @@ export async function isUnavailable(contentId: string): Promise<boolean> {
   return ((got[KEY_UNAVAILABLE] as string[] | undefined) ?? []).includes(contentId);
 }
 
+/** Netflix refused to play because this account already streams in another tab or browser. */
+export function netflixShowsConcurrentStreams(): boolean {
+  const text = (document.body?.innerText ?? '').slice(0, 3000);
+  return /M7020|more than one browser or tab|too many people|M7111-5060/i.test(text);
+}
+
 /** Netflix's own "can't play this" surfaces. Best-effort; false negatives are fine. */
 export function netflixShowsUnavailable(): boolean {
+  if (netflixShowsConcurrentStreams()) return false;
   if (document.querySelector('[data-uia="error-page"], [data-uia="nfplayer-error"], .nfp-error-page')) return true;
-  const text = document.body?.innerText ?? '';
-  return /not available|isn'?t available|unavailable in your|Error Code/i.test(text.slice(0, 2000));
+  const text = (document.body?.innerText ?? '').slice(0, 2000);
+  return /not available|isn'?t available|unavailable in your|Error Code/i.test(text);
 }
 
 export function isLoginOrGate(pathname: string = location.pathname): boolean {

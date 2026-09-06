@@ -93,10 +93,15 @@ export class SyncEngine {
     });
     this.tickTimer = window.setInterval(() => this.tick(), this.config.tickMs);
     await this.transport.join(roomId, this.adapter.getState().contentId);
-    // Claim content for a fresh room.
+    // The first snapshot follows the join acknowledgement; give it a moment.
+    for (let i = 0; i < 20 && !this.timeline; i++) await new Promise((r) => window.setTimeout(r, 50));
     const state = this.adapter.getState();
     if (state.contentId && this.timeline && !this.timeline.contentId) {
       this.sendIntent({ kind: 'setContent', contentId: state.contentId });
+    }
+    // Alone in the room: the room should reflect where we are, not reset us.
+    if (this.members.length <= 1 && state.ready && this.timeline && this.timeline.contentId === state.contentId) {
+      this.sendIntent({ kind: 'seek', mediaMs: state.currentTimeMs, playing: state.playing });
     }
     this.reportReadiness();
     this.invalidate();
@@ -239,7 +244,9 @@ export class SyncEngine {
    * does not pause the friend), release as soon as we can play again.
    */
   private trackBuffering(state: PlayerState): void {
-    const stalled = state.buffering && !state.seeking && state.ready;
+    // Only a stall while the room is meant to be playing needs to hold anyone.
+    const roomPlaying = !!this.timeline && (this.timeline.playing || this.timeline.playAtServerMs !== null);
+    const stalled = state.buffering && !state.seeking && state.ready && roomPlaying;
     if (stalled && !this.holding && this.holdTimer === null) {
       this.holdTimer = window.setTimeout(() => {
         this.holdTimer = null;
@@ -272,9 +279,10 @@ export class SyncEngine {
       if (took < 5000) this.seekLeadMs = this.seekLeadMs * 0.7 + took * 0.3;
     }
 
-    // Play / pause transitions (ignored while buffering or while the room is held for us).
-    const held = (this.timeline?.holds.length ?? 0) > 0;
-    if (state.playing !== prev.playing && !state.buffering && !held) {
+    // Play / pause transitions. Ignored while we buffer, or while someone
+    // else's hold is what paused us; our own hold never hides our own press.
+    const heldByOther = (this.timeline?.holds ?? []).some((m) => m !== this.transport.memberId);
+    if (state.playing !== prev.playing && !state.buffering && !heldByOther) {
       const echoed = this.consumeExpectation((e) => e.kind === 'playing' && e.value === state.playing);
       if (!echoed) {
         if (state.playing) this.sendIntent({ kind: 'play', mediaMs: state.currentTimeMs });
@@ -319,6 +327,8 @@ export class SyncEngine {
     if (!tl) return;
     const state = this.adapter.getState();
     if (!state.ready) return;
+    // A brand-new room (nobody has acted yet) has nothing to impose.
+    if (tl.revision <= 1 && this.members.length <= 1 && !tl.playing && tl.anchorMediaMs === 0) return;
     if (tl.contentId && state.contentId && tl.contentId !== state.contentId) return; // handled by preflight later
 
     const now = this.transport.serverNow();

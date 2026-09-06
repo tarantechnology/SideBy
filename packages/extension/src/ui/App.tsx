@@ -20,13 +20,14 @@ interface Props {
   onInvite: () => void;
   inviteLink: string | null;
   unavailable: boolean;
+  blocked: 'concurrent' | null;
   transportKind: 'local' | 'ws';
   onTransportChange: (kind: 'local' | 'ws') => void;
 }
 
 const IDLE_MS = 3000;
 
-export function App({ adapter, engine, call, bus, onJoin, onLeave, onInvite, inviteLink, unavailable, transportKind, onTransportChange }: Props) {
+export function App({ adapter, engine, call, bus, onJoin, onLeave, onInvite, inviteLink, unavailable, blocked, transportKind, onTransportChange }: Props) {
   const view = useAdapter(adapter);
   const sync = useSync(engine);
   const [cardOpen, setCardOpen] = useState(false);
@@ -62,13 +63,13 @@ export function App({ adapter, engine, call, bus, onJoin, onLeave, onInvite, inv
 
   return (
     <div className="sb-root">
-      <Pill view={view} sync={sync} idle={idle} cardOpen={cardOpen} onClick={toggleCard} />
+      <Pill view={view} sync={sync} idle={idle} cardOpen={cardOpen} blocked={blocked} onClick={toggleCard} />
       {call && sync.roomId && <CameraTile call={call} peerName={sync.peer?.name} />}
       {sync.startsInMs > 0 && <Countdown startsInMs={sync.startsInMs} />}
       {cardOpen && (
         <Card
           adapter={adapter} view={view} sync={sync} engine={engine} call={call}
-          inviteLink={inviteLink} unavailable={unavailable}
+          inviteLink={inviteLink} unavailable={unavailable} blocked={blocked}
           advancedOpen={advancedOpen} onToggleAdvanced={() => setAdvancedOpen((v) => !v)}
           onInvite={onInvite} onLeave={onLeave} onJoin={onJoin} onClose={() => setCardOpen(false)}
           transportKind={transportKind} onTransportChange={onTransportChange}

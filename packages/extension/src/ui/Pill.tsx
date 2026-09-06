@@ -7,14 +7,16 @@ interface Props {
   sync: SyncSnapshot;
   idle: boolean;
   cardOpen: boolean;
+  blocked: 'concurrent' | null;
   onClick: () => void;
 }
 
-export function Pill({ view, sync, idle, cardOpen, onClick }: Props) {
+export function Pill({ view, sync, idle, cardOpen, blocked, onClick }: Props) {
   const { state, connected, health } = view;
   let dot = 'sb-pill__dot';
   let sub: string;
-  if (!connected || !state.contentId) { sub = sync.roomId ? 'Open the title' : 'Waiting for Netflix'; }
+  if (blocked === 'concurrent') { dot += ' sb-pill__dot--warn'; sub = 'Netflix is open elsewhere'; }
+  else if (!connected || !state.contentId) { sub = sync.roomId ? 'Open the title' : 'Waiting for Netflix'; }
   else if (!state.ready) { dot += ' sb-pill__dot--warn'; sub = 'Loading player'; }
   else if (health.path === 'none') { dot += ' sb-pill__dot--bad'; sub = 'No player'; }
   else if (sync.roomId) {
