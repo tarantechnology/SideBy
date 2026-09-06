@@ -1,4 +1,4 @@
-import { messageId, resolveAt, type Intent, type IntentEnvelope, type PlayerState, type RoomTimeline } from '@sideby/shared';
+import { messageId, resolveAt, type Intent, type IntentEnvelope, type PlayerState, type Readiness, type RoomTimeline } from '@sideby/shared';
 import type { VideoAdapter } from '../adapters/VideoAdapter.js';
 import type { MemberInfo, Transport, TransportStatus } from '../transport/Transport.js';
 import { DEFAULT_SYNC_CONFIG, type SyncConfig } from './config.js';
@@ -21,6 +21,12 @@ export interface SyncSnapshot {
   lastReceived: string | null;
   rejected: number;
   config: SyncConfig;
+  /** This member's preflight state as last reported. */
+  readiness: Readiness;
+  /** Whether we are currently holding the room because our player buffers. */
+  holding: boolean;
+  /** The other member, if any. */
+  peer: MemberInfo | null;
 }
 
 type Expectation =
@@ -55,6 +61,10 @@ export class SyncEngine {
   private rejected = 0;
   private seekLeadMs = 250;
   private seekStartedAt: number | null = null;
+  private holding = false;
+  private holdTimer: number | null = null;
+  private cameraReady = false;
+  private lastReadiness: Readiness | null = null;
 
   constructor(private readonly adapter: VideoAdapter, private readonly transport: Transport) {}
 
@@ -86,6 +96,7 @@ export class SyncEngine {
     if (state.contentId && this.timeline && !this.timeline.contentId) {
       this.sendIntent({ kind: 'setContent', contentId: state.contentId });
     }
+    this.reportReadiness();
     this.invalidate();
   }
 
@@ -95,7 +106,10 @@ export class SyncEngine {
     this.offAdapter = this.offTransport = null;
     if (this.tickTimer !== null) window.clearInterval(this.tickTimer);
     if (this.startTimer !== null) window.clearTimeout(this.startTimer);
-    this.tickTimer = this.startTimer = null;
+    if (this.holdTimer !== null) window.clearTimeout(this.holdTimer);
+    this.tickTimer = this.startTimer = this.holdTimer = null;
+    this.holding = false;
+    this.lastReadiness = null;
     if (this.roomId) this.transport.leave();
     this.roomId = null;
     this.timeline = null;
@@ -121,6 +135,12 @@ export class SyncEngine {
   startTogether(delayMs = 3000): void {
     const state = this.adapter.getState();
     this.sendIntent({ kind: 'schedulePlay', mediaMs: state.currentTimeMs, delayMs });
+  }
+
+  /** Camera state feeds preflight; sync never depends on it. */
+  setCameraReady(ready: boolean): void {
+    this.cameraReady = ready;
+    this.reportReadiness();
   }
 
   subscribe(listener: () => void): () => void {
@@ -150,6 +170,9 @@ export class SyncEngine {
       lastReceived: this.lastReceived,
       rejected: this.rejected,
       config: this.config,
+      readiness: this.computeReadiness(state),
+      holding: this.holding,
+      peer: this.members.find((m) => m.memberId !== this.transport.memberId) ?? null,
     };
     return this.snapshotCache;
   }
@@ -189,11 +212,55 @@ export class SyncEngine {
     return true;
   }
 
+  private computeReadiness(state: PlayerState): Readiness {
+    return {
+      loggedIn: /^\/watch\//.test(location.pathname) || state.ready,
+      contentMatch: !!state.contentId && (!this.timeline?.contentId || this.timeline.contentId === state.contentId),
+      playerReady: state.ready,
+      cameraReady: this.cameraReady,
+    };
+  }
+
+  private reportReadiness(): void {
+    if (!this.roomId) return;
+    const r = this.computeReadiness(this.adapter.getState());
+    const prev = this.lastReadiness;
+    if (prev && prev.loggedIn === r.loggedIn && prev.contentMatch === r.contentMatch && prev.playerReady === r.playerReady && prev.cameraReady === r.cameraReady) return;
+    this.lastReadiness = r;
+    this.transport.sendReadiness(r);
+    this.invalidate();
+  }
+
+  /**
+   * Buffering → hold the room (after a short debounce so a momentary stall
+   * does not pause the friend), release as soon as we can play again.
+   */
+  private trackBuffering(state: PlayerState): void {
+    const stalled = state.buffering && !state.seeking && state.ready;
+    if (stalled && !this.holding && this.holdTimer === null) {
+      this.holdTimer = window.setTimeout(() => {
+        this.holdTimer = null;
+        if (!this.roomId) return;
+        this.holding = true;
+        this.sendIntent({ kind: 'hold', on: true });
+      }, this.config.holdDebounceMs);
+    } else if (!stalled) {
+      if (this.holdTimer !== null) { window.clearTimeout(this.holdTimer); this.holdTimer = null; }
+      if (this.holding) {
+        this.holding = false;
+        this.sendIntent({ kind: 'hold', on: false });
+      }
+    }
+  }
+
   /** Every adapter sample: detect user-initiated play/pause/seek. */
   private observe(state: PlayerState): void {
     const prev = this.prev;
     this.prev = state;
-    if (!prev || !state.ready || !this.roomId) return;
+    if (!this.roomId) return;
+    this.reportReadiness();
+    if (!prev || !state.ready) return;
+    this.trackBuffering(state);
 
     if (state.seeking && this.seekStartedAt === null) this.seekStartedAt = Date.now();
     if (!state.seeking && this.seekStartedAt !== null) {
@@ -202,8 +269,9 @@ export class SyncEngine {
       if (took < 5000) this.seekLeadMs = this.seekLeadMs * 0.7 + took * 0.3;
     }
 
-    // Play / pause transitions.
-    if (state.playing !== prev.playing && !state.buffering) {
+    // Play / pause transitions (ignored while buffering or while the room is held for us).
+    const held = (this.timeline?.holds.length ?? 0) > 0;
+    if (state.playing !== prev.playing && !state.buffering && !held) {
       const echoed = this.consumeExpectation((e) => e.kind === 'playing' && e.value === state.playing);
       if (!echoed) {
         if (state.playing) this.sendIntent({ kind: 'play', mediaMs: state.currentTimeMs });

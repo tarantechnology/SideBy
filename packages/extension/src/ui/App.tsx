@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { AdapterProxy } from '../bridge/AdapterProxy.js';
+import type { PeerCall } from '../rtc/PeerCall.js';
 import type { SyncEngine } from '../sync/SyncEngine.js';
+import { CameraTile } from './CameraTile.js';
 import { DebugPanel } from './DebugPanel.js';
 import { Pill } from './Pill.js';
 import { useAdapter } from './useAdapter.js';
@@ -9,6 +11,7 @@ import { useSync } from './useSync.js';
 interface Props {
   adapter: AdapterProxy;
   engine: SyncEngine;
+  call: PeerCall | null;
   /** External toggle signal (toolbar click, keyboard shortcut). */
   bus: EventTarget;
   onJoin: (roomId: string) => void;
@@ -19,7 +22,7 @@ interface Props {
 
 const IDLE_MS = 3000;
 
-export function App({ adapter, engine, bus, onJoin, onLeave, transportKind, onTransportChange }: Props) {
+export function App({ adapter, engine, call, bus, onJoin, onLeave, transportKind, onTransportChange }: Props) {
   const view = useAdapter(adapter);
   const sync = useSync(engine);
   const [debugOpen, setDebugOpen] = useState(false);
@@ -49,6 +52,7 @@ export function App({ adapter, engine, bus, onJoin, onLeave, transportKind, onTr
   return (
     <div className="sb-root">
       <Pill view={view} sync={sync} idle={idle} debugOpen={debugOpen} onToggleDebug={toggleDebug} />
+      {call && sync.roomId && <CameraTile call={call} peerName={sync.peer?.name} />}
       {debugOpen && <DebugPanel adapter={adapter} view={view} engine={engine} onJoin={onJoin} onLeave={onLeave} transportKind={transportKind} onTransportChange={onTransportChange} />}
     </div>
   );

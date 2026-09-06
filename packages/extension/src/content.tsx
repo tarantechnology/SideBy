@@ -4,6 +4,7 @@
  */
 import { createRoot } from 'react-dom/client';
 import { AdapterProxy } from './bridge/AdapterProxy.js';
+import { PeerCall } from './rtc/PeerCall.js';
 import { getMemberId, getMemberToken, getStoredRoom, getTransportPreference, setStoredRoom, setTransportPreference } from './storage.js';
 import { SyncEngine } from './sync/SyncEngine.js';
 import { LocalTransport } from './transport/LocalTransport.js';
@@ -70,27 +71,44 @@ async function mount() {
   let transportKind = await getTransportPreference();
   const makeTransport = (kind: 'local' | 'ws'): Transport =>
     kind === 'local' ? new LocalTransport(memberId) : new WsTransport(__SERVER_URL__, memberId, memberToken);
-  let engine = new SyncEngine(adapter, makeTransport(transportKind));
+  let transport = makeTransport(transportKind);
+  let engine = new SyncEngine(adapter, transport);
+  let call: PeerCall | null = null;
+
+  const setupCall = () => {
+    call?.stop();
+    call = null;
+    if (transport.kind !== 'ws') return;
+    call = new PeerCall(transport);
+    call.start();
+    call.subscribe(() => engine.setCameraReady(call?.getSnapshot().media === 'on'));
+  };
+  setupCall();
 
   const join = (roomId: string) => {
     void setStoredRoom({ roomId, transport: transportKind, joinedAtMs: Date.now() });
     void engine.join(roomId).catch((err) => console.warn('[sideby] join failed', err));
+    // Camera is opt-in per session and must never gate sync.
+    if (call && call.getSnapshot().media === 'off') void call.enableMedia();
   };
   const setTransport = (kind: 'local' | 'ws') => {
     if (kind === transportKind) return;
     engine.leave();
     transportKind = kind;
     void setTransportPreference(kind);
-    engine = new SyncEngine(adapter, makeTransport(kind));
+    transport = makeTransport(kind);
+    engine = new SyncEngine(adapter, transport);
+    setupCall();
     render();
   };
   const leave = () => {
     void setStoredRoom(null);
     engine.leave();
+    call?.disableMedia();
   };
 
   const root = createRoot(mountPoint);
-  const render = () => root.render(<App adapter={adapter} engine={engine} bus={bus} onJoin={join} onLeave={leave} transportKind={transportKind} onTransportChange={setTransport} />);
+  const render = () => root.render(<App adapter={adapter} engine={engine} call={call} bus={bus} onJoin={join} onLeave={leave} transportKind={transportKind} onTransportChange={setTransport} />);
   render();
   if (__DEV__) console.info('[sideby] overlay mounted as', memberId);
 
