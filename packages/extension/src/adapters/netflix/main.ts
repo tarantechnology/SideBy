@@ -41,6 +41,7 @@ if (!window.__sidebyAdapter) {
         case 'pause': await adapter.pause(); break;
         case 'seek': await adapter.seek(Number(msg.args[0])); break;
         case 'setPlaybackRate': await adapter.setPlaybackRate(Number(msg.args[0])); break;
+        case 'setVolume': await adapter.setVolume(Number(msg.args[0])); break;
         case 'getState': value = adapter.getState(); break;
         case 'getContentInfo': value = adapter.getContentInfo(); break;
         case 'getHealth': value = adapter.getHealth(); break;

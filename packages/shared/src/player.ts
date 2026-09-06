@@ -12,6 +12,9 @@ export interface PlayerState {
   seeking: boolean;
   ended: boolean;
   playbackRate: number;
+  /** 0..1 as reported by the player. */
+  volume: number;
+  muted: boolean;
   /** True once the underlying player can accept play/seek commands. */
   ready: boolean;
   /** Wall-clock (Date.now()) at which this snapshot was sampled. */
@@ -27,6 +30,8 @@ export const EMPTY_PLAYER_STATE: PlayerState = {
   seeking: false,
   ended: false,
   playbackRate: 1,
+  volume: 1,
+  muted: false,
   ready: false,
   sampledAtMs: 0,
 };

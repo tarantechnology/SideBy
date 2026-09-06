@@ -3,7 +3,7 @@ import type { AdapterEvent, AdapterHealth, ContentInfo, PlayerState } from '../a
 /** Namespace on every window.postMessage payload so page scripts can ignore us. */
 export const BRIDGE_CHANNEL = 'sideby/adapter/v1';
 
-export type BridgeMethod = 'play' | 'pause' | 'seek' | 'setPlaybackRate' | 'getState' | 'getContentInfo' | 'getHealth';
+export type BridgeMethod = 'play' | 'pause' | 'seek' | 'setPlaybackRate' | 'setVolume' | 'getState' | 'getContentInfo' | 'getHealth';
 
 export interface BridgeRequest {
   channel: typeof BRIDGE_CHANNEL;

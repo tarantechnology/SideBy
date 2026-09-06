@@ -49,6 +49,8 @@ export interface VideoAdapter {
   pause(): Promise<void>;
   seek(toMs: number): Promise<void>;
   setPlaybackRate(rate: number): Promise<void>;
+  /** 0..1; also unmutes when raised above zero. */
+  setVolume(volume: number): Promise<void>;
   on(listener: AdapterListener): () => void;
   destroy(): void;
 }

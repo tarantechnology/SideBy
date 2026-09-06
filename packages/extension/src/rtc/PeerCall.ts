@@ -11,6 +11,8 @@ export interface CallSnapshot {
   peerId: string | null;
   remoteHasVideo: boolean;
   remoteHasAudio: boolean;
+  /** 0..1 applied to the friend's audio. */
+  remoteVolume: number;
   error: string | null;
 }
 
@@ -39,6 +41,7 @@ export class PeerCall {
   private micOn = true;
   private camOn = true;
   private error: string | null = null;
+  private remoteVolume = 1;
   private offTransport: (() => void) | null = null;
   private listeners = new Set<() => void>();
   private cache: CallSnapshot | null = null;
@@ -84,6 +87,7 @@ export class PeerCall {
       peerId: this.peerId,
       remoteHasVideo: this.remoteStream.getVideoTracks().some((t) => t.readyState === 'live' && !t.muted),
       remoteHasAudio: this.remoteStream.getAudioTracks().length > 0,
+      remoteVolume: this.remoteVolume,
       error: this.error,
     };
     return this.cache;
@@ -113,6 +117,11 @@ export class PeerCall {
 
   disableMedia(): void {
     this.stopMedia();
+    this.invalidate();
+  }
+
+  setRemoteVolume(volume: number): void {
+    this.remoteVolume = Math.max(0, Math.min(1, volume));
     this.invalidate();
   }
 

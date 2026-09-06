@@ -55,7 +55,10 @@ export function CameraTile({ call, peerName }: Props) {
   }, []);
 
   useEffect(() => {
-    if (remoteRef.current && remoteRef.current.srcObject !== call.getRemoteStream()) remoteRef.current.srcObject = call.getRemoteStream();
+    const el = remoteRef.current;
+    if (!el) return;
+    if (el.srcObject !== call.getRemoteStream()) el.srcObject = call.getRemoteStream();
+    el.volume = snap.remoteVolume;
   });
   useEffect(() => {
     const local = call.getLocalStream();

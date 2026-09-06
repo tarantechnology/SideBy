@@ -46,6 +46,7 @@ export class AdapterProxy implements VideoAdapter {
   pause(): Promise<void> { return this.call('pause', []).then(() => undefined); }
   seek(toMs: number): Promise<void> { return this.call('seek', [toMs]).then(() => undefined); }
   setPlaybackRate(rate: number): Promise<void> { return this.call('setPlaybackRate', [rate]).then(() => undefined); }
+  setVolume(volume: number): Promise<void> { return this.call('setVolume', [volume]).then(() => undefined); }
 
   /** Refresh health and content info from the MAIN world. */
   async refresh(): Promise<void> {

@@ -18,17 +18,17 @@ interface Props {
 const RATES = [0.98, 1, 1.02] as const;
 const SEEK_STEP_MS = 10_000;
 
-export function DebugPanel({ adapter, view, engine, onJoin, onLeave, transportKind, onTransportChange }: Props) {
+/** Everything a developer wants and a viewer never needs. Lives under "Advanced". */
+export function AdvancedPanel({ adapter, view, engine, onJoin, onLeave, transportKind, onTransportChange }: Props) {
   const { state, health, content, connected, log } = view;
   const ready = connected && state.ready;
   const run = (label: string, fn: () => Promise<void>) => () => {
     fn().catch((err) => console.warn(`[sideby] ${label} failed`, err));
   };
-
   const pathClass = health.path === 'netflix-api' ? 'sb-ok' : health.path === 'video-element' ? 'sb-warn' : 'sb-bad';
 
   return (
-    <div className="sb-panel sb-material">
+    <div className="sb-advanced">
       <div className="sb-panel__head">
         <span className="sb-panel__title">Player</span>
         <span className="sb-muted sb-mono" style={{ fontSize: 11 }}>{connected ? `${health.polls} polls` : 'not connected'}</span>
@@ -40,6 +40,7 @@ export function DebugPanel({ adapter, view, engine, onJoin, onLeave, transportKi
         <dt>State</dt><dd className={state.playing ? 'sb-ok' : ''}>{state.ended ? 'ended' : state.playing ? 'playing' : 'paused'}{state.seeking ? ' · seeking' : ''}</dd>
         <dt>Buffering</dt><dd className={state.buffering ? 'sb-warn' : ''}>{state.buffering ? 'yes' : 'no'}</dd>
         <dt>Rate</dt><dd>{state.playbackRate.toFixed(2)}×</dd>
+        <dt>Volume</dt><dd>{state.muted ? 'muted' : `${Math.round(state.volume * 100)}%`}</dd>
         <dt>Ready</dt><dd className={state.ready ? 'sb-ok' : 'sb-warn'}>{state.ready ? 'yes' : 'no'}</dd>
       </dl>
       <div className="sb-sep" />
@@ -51,12 +52,7 @@ export function DebugPanel({ adapter, view, engine, onJoin, onLeave, transportKi
       </div>
       <div className="sb-row">
         {RATES.map((r) => (
-          <button
-            key={r}
-            className={`sb-btn sb-mono${Math.abs(state.playbackRate - r) < 0.001 ? ' sb-btn--on' : ''}`}
-            disabled={!ready}
-            onClick={run('rate', () => adapter.setPlaybackRate(r))}
-          >
+          <button key={r} className={`sb-btn sb-mono${Math.abs(state.playbackRate - r) < 0.001 ? ' sb-btn--on' : ''}`} disabled={!ready} onClick={run('rate', () => adapter.setPlaybackRate(r))}>
             {r.toFixed(2)}×
           </button>
         ))}
@@ -64,9 +60,7 @@ export function DebugPanel({ adapter, view, engine, onJoin, onLeave, transportKi
       <div className="sb-sep" />
       <SyncPanel engine={engine} onJoin={onJoin} onLeave={onLeave} transportKind={transportKind} onTransportChange={onTransportChange} />
       <div className="sb-sep" />
-      <div className="sb-panel__head">
-        <span className="sb-panel__title">Adapter</span>
-      </div>
+      <div className="sb-panel__head"><span className="sb-panel__title">Adapter</span></div>
       <dl className="sb-kv">
         <dt>Path</dt><dd className={pathClass}>{health.path}</dd>
         <dt>API / video</dt><dd>{health.apiFound ? 'api' : '—'} / {health.videoFound ? 'video' : '—'}</dd>
@@ -75,9 +69,7 @@ export function DebugPanel({ adapter, view, engine, onJoin, onLeave, transportKi
         <dt>Attached</dt><dd>{health.attachedAtMs ? formatDurationShort(Date.now() - health.attachedAtMs) : '—'}</dd>
         {health.lastError && (<><dt>Last error</dt><dd className="sb-bad" title={health.lastError}>{health.lastError}</dd></>)}
       </dl>
-      {log.length > 0 && (
-        <div className="sb-log">{log.map((line, i) => <div key={i}>{line}</div>)}</div>
-      )}
+      {log.length > 0 && <div className="sb-log">{log.map((line, i) => <div key={i}>{line}</div>)}</div>}
     </div>
   );
 }

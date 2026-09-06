@@ -26,6 +26,9 @@ interface NetflixSessionPlayer {
   seek?: (ms: number) => void;
   getPlaybackRate?: () => number;
   setPlaybackRate?: (rate: number) => void;
+  getVolume?: () => number;
+  setVolume?: (volume: number) => void;
+  setMuted?: (muted: boolean) => void;
 }
 
 interface NetflixVideoPlayerApi {
@@ -157,6 +160,20 @@ export class NetflixAdapter implements VideoAdapter {
     });
   }
 
+  async setVolume(volume: number): Promise<void> {
+    const v = Math.max(0, Math.min(1, volume));
+    await this.control('volume', (player, video) => {
+      // Netflix's API keeps its own volume UI in step; the element is the fallback.
+      if (player?.setVolume) player.setVolume(v);
+      if (video) video.volume = v;
+      if (v > 0) {
+        if (player?.setMuted) player.setMuted(false);
+        else if (video) video.muted = false;
+      }
+      if (!player && !video) throw new Error('no player');
+    });
+  }
+
   on(listener: AdapterListener): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
@@ -238,6 +255,7 @@ export class NetflixAdapter implements VideoAdapter {
     add('seeking', () => this.poll());
     add('seeked', () => { this.waiting = false; this.poll(); });
     add('ratechange', () => this.poll());
+    add('volumechange', () => this.poll());
     add('play', () => this.poll());
     add('pause', () => this.poll());
     add('ended', () => this.poll());
@@ -323,6 +341,8 @@ export class NetflixAdapter implements VideoAdapter {
       const busy = player?.getBusy ? !!player.getBusy() : false;
       const buffering = (this.waiting || stalled || busy) && !ended;
       const playbackRate = video?.playbackRate ?? player?.getPlaybackRate?.() ?? 1;
+      const volume = video?.volume ?? player?.getVolume?.() ?? 1;
+      const muted = video?.muted ?? false;
 
       this.state = {
         contentId: this.lastContentId,
@@ -333,6 +353,8 @@ export class NetflixAdapter implements VideoAdapter {
         seeking,
         ended,
         playbackRate,
+        volume,
+        muted,
         ready,
         sampledAtMs: Date.now(),
       };

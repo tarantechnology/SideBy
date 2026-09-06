@@ -15,6 +15,8 @@ export interface SyncSnapshot {
   correction: 'none' | 'slow' | 'fast' | 'seek';
   contentMismatch: boolean;
   startsInMs: number;
+  /** Resolved room playback state right now. */
+  roomPlaying: boolean;
   seekLeadMs: number;
   rttMs: number;
   lastSent: string | null;
@@ -164,6 +166,7 @@ export class SyncEngine {
       correction: this.lastCorrection,
       contentMismatch: !!(this.timeline?.contentId && state.contentId && this.timeline.contentId !== state.contentId),
       startsInMs: resolved?.startsInMs ?? 0,
+      roomPlaying: resolved?.playing ?? false,
       seekLeadMs: Math.round(this.seekLeadMs),
       rttMs: this.transport.rttMs(),
       lastSent: this.lastSent,

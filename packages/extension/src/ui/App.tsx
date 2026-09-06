@@ -3,9 +3,8 @@ import type { AdapterProxy } from '../bridge/AdapterProxy.js';
 import type { PeerCall } from '../rtc/PeerCall.js';
 import type { SyncEngine } from '../sync/SyncEngine.js';
 import { CameraTile } from './CameraTile.js';
+import { Card } from './Card.js';
 import { Countdown } from './Countdown.js';
-import { DebugPanel } from './DebugPanel.js';
-import { InviteCard } from './InviteCard.js';
 import { Pill } from './Pill.js';
 import { useAdapter } from './useAdapter.js';
 import { useSync } from './useSync.js';
@@ -30,12 +29,13 @@ const IDLE_MS = 3000;
 export function App({ adapter, engine, call, bus, onJoin, onLeave, onInvite, inviteLink, unavailable, transportKind, onTransportChange }: Props) {
   const view = useAdapter(adapter);
   const sync = useSync(engine);
-  const [debugOpen, setDebugOpen] = useState(false);
   const [cardOpen, setCardOpen] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [idle, setIdle] = useState(false);
 
-  const toggleDebug = useCallback(() => setDebugOpen((v) => !v), []);
   const toggleCard = useCallback(() => setCardOpen((v) => !v), []);
+  // ⌘⇧D opens the card straight to Advanced.
+  const toggleDebug = useCallback(() => { setCardOpen(true); setAdvancedOpen((v) => !v); }, []);
 
   useEffect(() => {
     const onToggle = () => toggleDebug();
@@ -62,13 +62,18 @@ export function App({ adapter, engine, call, bus, onJoin, onLeave, onInvite, inv
 
   return (
     <div className="sb-root">
-      <Pill view={view} sync={sync} idle={idle} debugOpen={debugOpen} onToggleDebug={toggleDebug} onClick={toggleCard} />
+      <Pill view={view} sync={sync} idle={idle} cardOpen={cardOpen} onClick={toggleCard} />
       {call && sync.roomId && <CameraTile call={call} peerName={sync.peer?.name} />}
       {sync.startsInMs > 0 && <Countdown startsInMs={sync.startsInMs} />}
-      {cardOpen && !debugOpen && (
-        <InviteCard view={view} sync={sync} inviteLink={inviteLink} unavailable={unavailable} onInvite={onInvite} onStart={() => engine.startTogether(3000)} onLeave={() => { onLeave(); }} onClose={() => setCardOpen(false)} />
+      {cardOpen && (
+        <Card
+          adapter={adapter} view={view} sync={sync} engine={engine} call={call}
+          inviteLink={inviteLink} unavailable={unavailable}
+          advancedOpen={advancedOpen} onToggleAdvanced={() => setAdvancedOpen((v) => !v)}
+          onInvite={onInvite} onLeave={onLeave} onJoin={onJoin} onClose={() => setCardOpen(false)}
+          transportKind={transportKind} onTransportChange={onTransportChange}
+        />
       )}
-      {debugOpen && <DebugPanel adapter={adapter} view={view} engine={engine} onJoin={onJoin} onLeave={onLeave} transportKind={transportKind} onTransportChange={onTransportChange} />}
     </div>
   );
 }

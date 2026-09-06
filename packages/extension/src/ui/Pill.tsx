@@ -1,4 +1,4 @@
-import { Bug } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import type { SyncSnapshot } from '../sync/SyncEngine.js';
 import type { AdapterView } from './useAdapter.js';
 
@@ -6,12 +6,11 @@ interface Props {
   view: AdapterView;
   sync: SyncSnapshot;
   idle: boolean;
-  debugOpen: boolean;
-  onToggleDebug: () => void;
+  cardOpen: boolean;
   onClick: () => void;
 }
 
-export function Pill({ view, sync, idle, debugOpen, onToggleDebug, onClick }: Props) {
+export function Pill({ view, sync, idle, cardOpen, onClick }: Props) {
   const { state, connected, health } = view;
   let dot = 'sb-pill__dot';
   let sub: string;
@@ -30,13 +29,11 @@ export function Pill({ view, sync, idle, debugOpen, onToggleDebug, onClick }: Pr
   else { dot += ' sb-pill__dot--ok'; sub = state.playing ? 'Playing' : 'Paused'; }
 
   return (
-    <div className={`sb-pill sb-material${idle && !debugOpen ? ' sb-pill--idle' : ''}`} onClick={onClick} role="button" title="Sideby">
+    <div className={`sb-pill sb-material${idle && !cardOpen ? ' sb-pill--idle' : ''}`} onClick={onClick} role="button" aria-expanded={cardOpen} title="Sideby">
       <span className={dot} />
       <span className="sb-pill__label">Sideby</span>
       <span className="sb-pill__sub">· {sub}</span>
-      <button className="sb-pill__btn" title="Debug panel (⌘⇧D)" onClick={(e) => { e.stopPropagation(); onToggleDebug(); }} aria-pressed={debugOpen}>
-        <Bug size={13} strokeWidth={2} />
-      </button>
+      <ChevronDown size={13} className={`sb-pill__chev${cardOpen ? ' sb-pill__chev--open' : ''}`} />
     </div>
   );
 }
