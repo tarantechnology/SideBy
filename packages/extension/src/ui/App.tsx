@@ -1,19 +1,25 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { AdapterProxy } from '../bridge/AdapterProxy.js';
+import type { SyncEngine } from '../sync/SyncEngine.js';
 import { DebugPanel } from './DebugPanel.js';
 import { Pill } from './Pill.js';
 import { useAdapter } from './useAdapter.js';
+import { useSync } from './useSync.js';
 
 interface Props {
   adapter: AdapterProxy;
+  engine: SyncEngine;
   /** External toggle signal (toolbar click, keyboard shortcut). */
   bus: EventTarget;
+  onJoin: (roomId: string) => void;
+  onLeave: () => void;
 }
 
 const IDLE_MS = 3000;
 
-export function App({ adapter, bus }: Props) {
+export function App({ adapter, engine, bus, onJoin, onLeave }: Props) {
   const view = useAdapter(adapter);
+  const sync = useSync(engine);
   const [debugOpen, setDebugOpen] = useState(false);
   const [idle, setIdle] = useState(false);
 
@@ -40,8 +46,8 @@ export function App({ adapter, bus }: Props) {
 
   return (
     <div className="sb-root">
-      <Pill view={view} idle={idle} debugOpen={debugOpen} onToggleDebug={toggleDebug} />
-      {debugOpen && <DebugPanel adapter={adapter} view={view} />}
+      <Pill view={view} sync={sync} idle={idle} debugOpen={debugOpen} onToggleDebug={toggleDebug} />
+      {debugOpen && <DebugPanel adapter={adapter} view={view} engine={engine} onJoin={onJoin} onLeave={onLeave} />}
     </div>
   );
 }

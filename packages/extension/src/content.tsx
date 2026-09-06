@@ -4,6 +4,9 @@
  */
 import { createRoot } from 'react-dom/client';
 import { AdapterProxy } from './bridge/AdapterProxy.js';
+import { getMemberId, getStoredRoom, setStoredRoom } from './storage.js';
+import { SyncEngine } from './sync/SyncEngine.js';
+import { LocalTransport } from './transport/LocalTransport.js';
 import { App } from './ui/App.js';
 import themeCss from './ui/theme.css';
 
@@ -11,7 +14,7 @@ declare const __DEV__: boolean;
 
 const HOST_ID = 'sideby-host';
 
-function mount() {
+async function mount() {
   if (document.getElementById(HOST_ID)) return;
 
   const host = document.createElement('div');
@@ -57,9 +60,29 @@ function mount() {
   const port = chrome.runtime.connect({ name: 'sideby-tab' });
   const keepalive = window.setInterval(() => { try { port.postMessage({ type: 'ping' }); } catch { window.clearInterval(keepalive); } }, 20_000);
 
-  createRoot(mountPoint).render(<App adapter={adapter} bus={bus} />);
-  if (__DEV__) console.info('[sideby] overlay mounted');
+  const memberId = await getMemberId();
+  const transport = new LocalTransport(memberId);
+  const engine = new SyncEngine(adapter, transport);
+
+  const join = (roomId: string) => {
+    void setStoredRoom({ roomId, transport: 'local', joinedAtMs: Date.now() });
+    void engine.join(roomId).catch((err) => console.warn('[sideby] join failed', err));
+  };
+  const leave = () => {
+    void setStoredRoom(null);
+    engine.leave();
+  };
+
+  createRoot(mountPoint).render(<App adapter={adapter} engine={engine} bus={bus} onJoin={join} onLeave={leave} />);
+  if (__DEV__) console.info('[sideby] overlay mounted as', memberId);
+
+  // Refresh or navigation must not lose the room: rejoin what we were in.
+  const stored = await getStoredRoom();
+  if (stored && Date.now() - stored.joinedAtMs < 6 * 60 * 60 * 1000) join(stored.roomId);
+
+  // Expose for automated testing.
+  (window as unknown as { __sideby?: unknown }).__sideby = { engine, transport, adapter, memberId, join, leave };
 }
 
-if (document.body) mount();
-else document.addEventListener('DOMContentLoaded', mount, { once: true });
+if (document.body) void mount();
+else document.addEventListener('DOMContentLoaded', () => void mount(), { once: true });

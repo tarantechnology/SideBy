@@ -34,6 +34,7 @@ interface NetflixVideoPlayerApi {
 }
 
 const POLL_INTERVAL_MS = 250;
+const MIN_EVENT_POLL_GAP_MS = 200;
 const WATCH_PATH = /^\/watch\/(\d+)/;
 
 function readContentIdFromUrl(): string | null {
@@ -74,6 +75,7 @@ export class NetflixAdapter implements VideoAdapter {
   };
 
   private pollTimer: number | null = null;
+  private lastPollAt = 0;
   private video: HTMLVideoElement | null = null;
   private waiting = false;
   private wasReady = false;
@@ -239,6 +241,8 @@ export class NetflixAdapter implements VideoAdapter {
     add('play', () => this.poll());
     add('pause', () => this.poll());
     add('ended', () => this.poll());
+    // Media events keep firing in hidden tabs where timers are throttled to 1Hz.
+    add('timeupdate', () => { if (Date.now() - this.lastPollAt >= MIN_EVENT_POLL_GAP_MS) this.poll(); });
   }
 
   private detachVideo(): void {
@@ -285,6 +289,7 @@ export class NetflixAdapter implements VideoAdapter {
 
   private poll(): void {
     this.health.polls++;
+    this.lastPollAt = Date.now();
     this.checkContentChange();
     const player = this.resolvePlayer();
     const video = this.resolveVideo();
@@ -302,9 +307,11 @@ export class NetflixAdapter implements VideoAdapter {
     }
 
     try {
-      const currentTimeMs = player?.getCurrentTime
-        ? player.getCurrentTime()
-        : (video?.currentTime ?? 0) * 1000;
+      // The <video> element is the precise source of position: Netflix's
+      // getCurrentTime() lags it by up to ~500ms between its own updates.
+      const currentTimeMs = video
+        ? video.currentTime * 1000
+        : player?.getCurrentTime?.() ?? 0;
       const durationMs = player?.getDuration
         ? player.getDuration()
         : Number.isFinite(video?.duration) ? (video!.duration) * 1000 : 0;

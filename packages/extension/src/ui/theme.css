@@ -133,3 +133,21 @@
 .sb-muted { color: var(--sb-text-2); }
 .sb-log { margin-top: 8px; max-height: 96px; overflow: auto; font-family: var(--sb-mono); font-size: 10.5px; color: var(--sb-text-2); line-height: 1.45; }
 .sb-log div { white-space: nowrap; }
+
+/* --------------------------------------------------------------- inputs */
+.sb-input {
+  flex: 1; min-width: 0;
+  height: 30px; padding: 0 10px;
+  border-radius: var(--sb-radius-sm);
+  border: 1px solid var(--sb-border);
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--sb-text);
+  font: inherit; font-size: 12px;
+  outline: none;
+  transition: border-color 140ms var(--sb-ease), box-shadow 140ms var(--sb-ease);
+}
+.sb-input::placeholder { color: var(--sb-text-3); }
+.sb-input:focus { border-color: var(--sb-accent); box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.25); }
+.sb-input--num { width: 52px; flex: 0 0 auto; height: 24px; padding: 0 6px; font-size: 11px; text-align: right; -moz-appearance: textfield; }
+.sb-input--num::-webkit-inner-spin-button { -webkit-appearance: none; }
+.sb-field { flex: 1; display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--sb-text-2); }
