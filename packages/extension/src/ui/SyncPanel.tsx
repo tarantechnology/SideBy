@@ -9,9 +9,11 @@ interface Props {
   engine: SyncEngine;
   onJoin: (roomId: string) => void;
   onLeave: () => void;
+  transportKind: 'local' | 'ws';
+  onTransportChange: (kind: 'local' | 'ws') => void;
 }
 
-export function SyncPanel({ engine, onJoin, onLeave }: Props) {
+export function SyncPanel({ engine, onJoin, onLeave, transportKind, onTransportChange }: Props) {
   const sync = useSync(engine);
   const [code, setCode] = useState('');
   const inRoom = sync.roomId !== null;
@@ -25,6 +27,12 @@ export function SyncPanel({ engine, onJoin, onLeave }: Props) {
         <span className="sb-panel__title">Sync</span>
         <span className="sb-muted sb-mono" style={{ fontSize: 11 }}>{inRoom ? `${sync.status} · ${sync.role}` : 'not in a room'}</span>
       </div>
+      {!inRoom && (
+        <div className="sb-row" style={{ marginBottom: 6 }}>
+          <button className={`sb-btn${transportKind === 'ws' ? ' sb-btn--on' : ''}`} onClick={() => onTransportChange('ws')}>Server</button>
+          <button className={`sb-btn${transportKind === 'local' ? ' sb-btn--on' : ''}`} onClick={() => onTransportChange('local')}>Local tabs</button>
+        </div>
+      )}
       {!inRoom ? (
         <div className="sb-row">
           <input

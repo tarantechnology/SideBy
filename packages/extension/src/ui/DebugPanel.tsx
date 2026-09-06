@@ -11,12 +11,14 @@ interface Props {
   engine: SyncEngine;
   onJoin: (roomId: string) => void;
   onLeave: () => void;
+  transportKind: 'local' | 'ws';
+  onTransportChange: (kind: 'local' | 'ws') => void;
 }
 
 const RATES = [0.98, 1, 1.02] as const;
 const SEEK_STEP_MS = 10_000;
 
-export function DebugPanel({ adapter, view, engine, onJoin, onLeave }: Props) {
+export function DebugPanel({ adapter, view, engine, onJoin, onLeave, transportKind, onTransportChange }: Props) {
   const { state, health, content, connected, log } = view;
   const ready = connected && state.ready;
   const run = (label: string, fn: () => Promise<void>) => () => {
@@ -60,7 +62,7 @@ export function DebugPanel({ adapter, view, engine, onJoin, onLeave }: Props) {
         ))}
       </div>
       <div className="sb-sep" />
-      <SyncPanel engine={engine} onJoin={onJoin} onLeave={onLeave} />
+      <SyncPanel engine={engine} onJoin={onJoin} onLeave={onLeave} transportKind={transportKind} onTransportChange={onTransportChange} />
       <div className="sb-sep" />
       <div className="sb-panel__head">
         <span className="sb-panel__title">Adapter</span>

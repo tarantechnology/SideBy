@@ -13,11 +13,13 @@ interface Props {
   bus: EventTarget;
   onJoin: (roomId: string) => void;
   onLeave: () => void;
+  transportKind: 'local' | 'ws';
+  onTransportChange: (kind: 'local' | 'ws') => void;
 }
 
 const IDLE_MS = 3000;
 
-export function App({ adapter, engine, bus, onJoin, onLeave }: Props) {
+export function App({ adapter, engine, bus, onJoin, onLeave, transportKind, onTransportChange }: Props) {
   const view = useAdapter(adapter);
   const sync = useSync(engine);
   const [debugOpen, setDebugOpen] = useState(false);
@@ -47,7 +49,7 @@ export function App({ adapter, engine, bus, onJoin, onLeave }: Props) {
   return (
     <div className="sb-root">
       <Pill view={view} sync={sync} idle={idle} debugOpen={debugOpen} onToggleDebug={toggleDebug} />
-      {debugOpen && <DebugPanel adapter={adapter} view={view} engine={engine} onJoin={onJoin} onLeave={onLeave} />}
+      {debugOpen && <DebugPanel adapter={adapter} view={view} engine={engine} onJoin={onJoin} onLeave={onLeave} transportKind={transportKind} onTransportChange={onTransportChange} />}
     </div>
   );
 }

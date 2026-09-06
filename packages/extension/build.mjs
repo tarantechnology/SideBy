@@ -27,6 +27,7 @@ const common = {
   jsx: 'automatic',
   define: {
     __DEV__: JSON.stringify(dev),
+    __SERVER_URL__: JSON.stringify(process.env.SIDEBY_SERVER_URL ?? 'ws://localhost:8787/ws'),
     'process.env.NODE_ENV': JSON.stringify(dev ? 'development' : 'production'),
   },
   outdir: dist,
@@ -49,6 +50,9 @@ const stampPlugin = {
   name: 'sideby-stamp',
   setup(build) {
     build.onStart(() => { buildId = String(Date.now()); });
+    // Resolve __BUILD_ID__ at bundle time to the current build id.
+    build.onResolve({ filter: /^virtual:build-id$/ }, () => ({ path: 'build-id', namespace: 'sideby' }));
+    build.onLoad({ filter: /.*/, namespace: 'sideby' }, () => ({ contents: `export const buildId = ${JSON.stringify(buildId)};`, loader: 'js' }));
     build.onEnd(async (result) => {
       if (result.errors.length) return;
       await copyStatic();

@@ -3,3 +3,4 @@ export * from './ids.js';
 export * from './clock.js';
 export * from './timeline.js';
 export * from './room.js';
+export * from './protocol.js';

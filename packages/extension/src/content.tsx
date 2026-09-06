@@ -4,13 +4,18 @@
  */
 import { createRoot } from 'react-dom/client';
 import { AdapterProxy } from './bridge/AdapterProxy.js';
-import { getMemberId, getStoredRoom, setStoredRoom } from './storage.js';
+import { getMemberId, getMemberToken, getStoredRoom, getTransportPreference, setStoredRoom, setTransportPreference } from './storage.js';
 import { SyncEngine } from './sync/SyncEngine.js';
 import { LocalTransport } from './transport/LocalTransport.js';
+import type { Transport } from './transport/Transport.js';
+import { WsTransport } from './transport/WsTransport.js';
 import { App } from './ui/App.js';
 import themeCss from './ui/theme.css';
 
+import { buildId as __BUILD_ID__ } from 'virtual:build-id';
+
 declare const __DEV__: boolean;
+declare const __SERVER_URL__: string;
 
 const HOST_ID = 'sideby-host';
 
@@ -61,27 +66,63 @@ async function mount() {
   const keepalive = window.setInterval(() => { try { port.postMessage({ type: 'ping' }); } catch { window.clearInterval(keepalive); } }, 20_000);
 
   const memberId = await getMemberId();
-  const transport = new LocalTransport(memberId);
-  const engine = new SyncEngine(adapter, transport);
+  const memberToken = await getMemberToken();
+  let transportKind = await getTransportPreference();
+  const makeTransport = (kind: 'local' | 'ws'): Transport =>
+    kind === 'local' ? new LocalTransport(memberId) : new WsTransport(__SERVER_URL__, memberId, memberToken);
+  let engine = new SyncEngine(adapter, makeTransport(transportKind));
 
   const join = (roomId: string) => {
-    void setStoredRoom({ roomId, transport: 'local', joinedAtMs: Date.now() });
+    void setStoredRoom({ roomId, transport: transportKind, joinedAtMs: Date.now() });
     void engine.join(roomId).catch((err) => console.warn('[sideby] join failed', err));
+  };
+  const setTransport = (kind: 'local' | 'ws') => {
+    if (kind === transportKind) return;
+    engine.leave();
+    transportKind = kind;
+    void setTransportPreference(kind);
+    engine = new SyncEngine(adapter, makeTransport(kind));
+    render();
   };
   const leave = () => {
     void setStoredRoom(null);
     engine.leave();
   };
 
-  createRoot(mountPoint).render(<App adapter={adapter} engine={engine} bus={bus} onJoin={join} onLeave={leave} />);
+  const root = createRoot(mountPoint);
+  const render = () => root.render(<App adapter={adapter} engine={engine} bus={bus} onJoin={join} onLeave={leave} transportKind={transportKind} onTransportChange={setTransport} />);
+  render();
   if (__DEV__) console.info('[sideby] overlay mounted as', memberId);
 
   // Refresh or navigation must not lose the room: rejoin what we were in.
   const stored = await getStoredRoom();
-  if (stored && Date.now() - stored.joinedAtMs < 6 * 60 * 60 * 1000) join(stored.roomId);
+  if (stored && Date.now() - stored.joinedAtMs < 6 * 60 * 60 * 1000) {
+    if (stored.transport !== transportKind) setTransport(stored.transport);
+    join(stored.roomId);
+  }
 
-  // Expose for automated testing.
-  (window as unknown as { __sideby?: unknown }).__sideby = { engine, transport, adapter, memberId, join, leave };
+  // Test bridge: the MAIN world (and automation running there) can drive
+  // the engine over postMessage, since isolated-world globals are invisible.
+  host.dataset.member = memberId;
+  host.dataset.build = __BUILD_ID__;
+  window.addEventListener('message', (ev) => {
+    const msg = ev.data as { channel?: string; id?: number; cmd?: string; args?: unknown[] };
+    if (ev.source !== window || msg?.channel !== 'sideby/test/v1' || !msg.cmd) return;
+    let value: unknown;
+    try {
+      switch (msg.cmd) {
+        case 'join': join(String(msg.args?.[0])); break;
+        case 'leave': leave(); break;
+        case 'start': engine.startTogether(Number(msg.args?.[0] ?? 3000)); break;
+        case 'config': engine.setConfig(msg.args?.[0] as Record<string, number>); break;
+        case 'snapshot': value = engine.getSnapshot(); break;
+        case 'toggleDebug': bus.dispatchEvent(new Event('toggle-debug')); break;
+      }
+      window.postMessage({ channel: 'sideby/test/v1', id: msg.id, ok: true, value }, location.origin);
+    } catch (err) {
+      window.postMessage({ channel: 'sideby/test/v1', id: msg.id, ok: false, error: String(err) }, location.origin);
+    }
+  });
 }
 
 if (document.body) void mount();

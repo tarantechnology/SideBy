@@ -81,6 +81,14 @@ export class LocalTransport implements Transport {
     return 2;
   }
 
+  sendReadiness(): void {
+    /* local rooms have no preflight */
+  }
+
+  sendRtc(): void {
+    /* no camera between tabs of one browser */
+  }
+
   on(listener: (e: TransportEvent) => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
