@@ -1,6 +1,7 @@
 import { Check, ChevronRight, Copy, Link2, LogOut, Mic, MicOff, Pause, Play, RotateCcw, RotateCw, Video, VideoOff, Volume1, Volume2, VolumeX, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { Readiness } from '@sideby/shared';
+import { currentService } from '../adapters/services.js';
 import type { VideoAdapter } from '../adapters/VideoAdapter.js';
 import type { PeerCall } from '../rtc/PeerCall.js';
 import type { SyncEngine, SyncSnapshot } from '../sync/SyncEngine.js';
@@ -29,6 +30,7 @@ interface Props {
 }
 
 const SKIP_MS = 10_000;
+const SERVICE_NAME = currentService()?.name ?? 'the service';
 
 /**
  * The one surface a viewer sees. Invite → friend joins → both ready →
@@ -41,7 +43,7 @@ export function Card(props: Props) {
   return (
     <div className="sb-card sb-material">
       <div className="sb-card__head">
-        <span className="sb-card__title">{inRoom ? 'Watching together' : 'Watch together'}</span>
+        <span className="sb-card__title">{inRoom ? 'Watching together' : ''}</span>
         <button className="sb-iconbtn" onClick={onClose} title="Close"><X size={14} /></button>
       </div>
 
@@ -50,13 +52,14 @@ export function Card(props: Props) {
       )}
 
       {!inRoom ? (
-        <>
-          <p className="sb-card__text">Invite a friend. Their camera floats over the movie, and you both control one shared playhead.</p>
+        <div className="sb-hero">
+          <div className="sb-hero__glyph" aria-hidden="true"><span /><span /></div>
+          <div className="sb-hero__title">{view.content.title ?? 'Watch together'}</div>
+          <div className="sb-hero__sub">{view.state.contentId ? 'Watch it in sync with a friend.' : 'Open a movie or episode first.'}</div>
           <button className="sb-btn sb-btn--primary sb-btn--lg" disabled={!view.state.contentId} onClick={onInvite}>
             <Link2 size={14} />Invite a friend
           </button>
-          {!view.state.contentId && <p className="sb-card__hint">Open a movie or episode first.</p>}
-        </>
+        </div>
       ) : (
         <RoomBody view={view} sync={sync} engine={engine} call={call} adapter={adapter} inviteLink={inviteLink} unavailable={unavailable} onLeave={onLeave} />
       )}
@@ -112,7 +115,7 @@ function RoomBody({ view, sync, engine, call, adapter, inviteLink, unavailable, 
         <Person label="You" readiness={me} connected unavailable={unavailable} />
         <Person label="Friend" readiness={peerReady} connected={!!peer?.connected} present={!!peer} />
       </div>
-      {unavailable && <p className="sb-card__warn">This title isn’t available on your Netflix plan or region. Sideby can’t work around that, but you can pick another title together.</p>}
+      {unavailable && <p className="sb-card__warn">This title isn’t available on your {SERVICE_NAME} plan or region. Sideby can’t work around that, but you can pick another title together.</p>}
       {sync.contentMismatch && !unavailable && <p className="sb-card__hint">Taking you to the right title…</p>}
 
       {(offerStart || counting) && (
@@ -143,7 +146,7 @@ function RoomBody({ view, sync, engine, call, adapter, inviteLink, unavailable, 
 function syncWord(sync: SyncSnapshot, peerConnected: boolean): string {
   if (!peerConnected) return 'waiting for friend';
   if (sync.startsInMs > 0) return `starting in ${Math.ceil(sync.startsInMs / 1000)}`;
-  if ((sync.timeline?.holds.length ?? 0) > 0) return 'waiting for buffer';
+  if ((sync.timeline?.holds.length ?? 0) > 0) return 'waiting for buffer or ad';
   if (sync.correction === 'seek') return 'resyncing';
   if (sync.correction !== 'none') return 'catching up';
   return sync.roomPlaying ? 'in sync' : 'paused together';
@@ -196,7 +199,7 @@ function Person({ label, readiness, connected, present = true, unavailable = fal
   if (!present) status = 'Waiting to join';
   else if (!connected) { status = 'Reconnecting'; tone = 'warn'; }
   else if (unavailable) { status = 'Title unavailable'; tone = 'warn'; }
-  else if (!readiness?.loggedIn) { status = 'Signing in to Netflix'; tone = 'warn'; }
+  else if (!readiness?.loggedIn) { status = `Signing in to ${SERVICE_NAME}`; tone = 'warn'; }
   else if (!readiness.contentMatch) { status = 'Opening the title'; tone = 'warn'; }
   else if (!readiness.playerReady) { status = 'Loading player'; tone = 'warn'; }
   else { status = readiness.cameraReady ? 'Ready · camera on' : 'Ready'; tone = 'ok'; }
