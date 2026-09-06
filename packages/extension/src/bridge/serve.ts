@@ -1,6 +1,24 @@
 import type { VideoAdapter } from '../adapters/VideoAdapter.js';
 import { BRIDGE_CHANNEL, isBridgeMessage, type BridgeMessage } from './messages.js';
 
+declare global {
+  interface Window {
+    /** The MAIN-world adapter, for the isolated world's bridge and for automation. */
+    __sidebyAdapter?: VideoAdapter;
+  }
+}
+
+/**
+ * MAIN-world entry helper: constructs the service's adapter once per page
+ * and serves it to the isolated world over window.postMessage.
+ */
+export function installAdapter(create: () => VideoAdapter): void {
+  if (window.__sidebyAdapter) return;
+  const adapter = create();
+  window.__sidebyAdapter = adapter;
+  serveAdapter(adapter);
+}
+
 /** Exposes a MAIN-world adapter to the isolated world over window.postMessage. */
 export function serveAdapter(adapter: VideoAdapter): void {
   const post = (msg: BridgeMessage) => window.postMessage(msg, location.origin);

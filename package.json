@@ -2,7 +2,7 @@
   "name": "sideby",
   "private": true,
   "version": "0.1.0",
-  "description": "Netflix, multiplayer. Watch in sync with a friend whose camera floats over the movie.",
+  "description": "Netflix, Disney+, and Hulu, multiplayer. Watch in sync with a friend whose camera floats over the movie.",
   "packageManager": "pnpm@10.11.0",
   "scripts": {
     "build": "pnpm -r --filter ./packages/* run build",

@@ -1,12 +1,14 @@
 /** MV3 service worker: toolbar click routing and dev-time auto reload. */
+import { NETFLIX, serviceForUrl } from './adapters/services.js';
+
 declare const __DEV__: boolean;
 
 chrome.action.onClicked.addListener((tab) => {
   if (!tab.id) return;
-  if (tab.url?.startsWith('https://www.netflix.com/')) {
+  if (tab.url && serviceForUrl(tab.url)) {
     void chrome.tabs.sendMessage(tab.id, { type: 'sideby:toggle' }).catch(() => undefined);
   } else {
-    void chrome.tabs.create({ url: 'https://www.netflix.com/' });
+    void chrome.tabs.create({ url: NETFLIX.home });
   }
 });
 

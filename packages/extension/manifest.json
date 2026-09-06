@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Sideby",
-  "description": "Netflix, multiplayer. Watch in sync with a friend whose camera floats over the movie.",
+  "description": "Netflix, Disney+, and Hulu, multiplayer. Watch in sync with a friend whose camera floats over the movie.",
   "version": "0.1.0",
   "minimum_chrome_version": "116",
   "action": {
@@ -22,7 +22,10 @@
     "alarms"
   ],
   "host_permissions": [
-    "https://www.netflix.com/*"
+    "https://www.netflix.com/*",
+    "https://www.disneyplus.com/*",
+    "https://disneyplus.com/*",
+    "https://www.hulu.com/*"
   ],
   "content_scripts": [
     {
@@ -37,12 +40,24 @@
     },
     {
       "matches": [
-        "https://www.netflix.com/*"
+        "https://www.disneyplus.com/*",
+        "https://disneyplus.com/*"
       ],
       "js": [
-        "content.js"
+        "disneyplus-main.js"
       ],
-      "run_at": "document_idle"
+      "world": "MAIN",
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://www.hulu.com/*"
+      ],
+      "js": [
+        "hulu-main.js"
+      ],
+      "world": "MAIN",
+      "run_at": "document_start"
     },
     {
       "matches": [
@@ -56,6 +71,10 @@
     },
     {
       "matches": [
+        "https://www.netflix.com/*",
+        "https://www.disneyplus.com/*",
+        "https://disneyplus.com/*",
+        "https://www.hulu.com/*",
         "http://localhost:8787/mock*"
       ],
       "js": [

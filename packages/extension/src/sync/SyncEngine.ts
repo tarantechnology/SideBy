@@ -222,7 +222,8 @@ export class SyncEngine {
 
   private computeReadiness(state: PlayerState): Readiness {
     return {
-      loggedIn: /^\/watch\//.test(location.pathname) || state.ready,
+      // On a title page (the adapter parsed an id) the service let us through sign-in.
+      loggedIn: !!state.contentId || state.ready,
       contentMatch: !!state.contentId && (!this.timeline?.contentId || this.timeline.contentId === state.contentId),
       playerReady: state.ready,
       cameraReady: this.cameraReady,
@@ -304,7 +305,7 @@ export class SyncEngine {
 
   private onContentChange(contentId: string): void {
     if (!this.timeline || this.timeline.contentId === contentId) return;
-    // Netflix auto-advanced (or the user picked a new title): move the room.
+    // The service auto-advanced (or the user picked a new title): move the room.
     this.sendIntent({ kind: 'setContent', contentId });
   }
 

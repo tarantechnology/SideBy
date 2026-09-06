@@ -1,4 +1,5 @@
-// esbuild pipeline: three IIFE bundles for MV3 + manifest/icons copy.
+// esbuild pipeline: one MAIN-world bundle per service, plus the overlay and
+// service worker, as IIFEs for MV3 + manifest/icons copy.
 // `--watch` rebuilds on change and serves /version on :8788 so the dev
 // service worker can reload the extension automatically.
 import * as esbuild from 'esbuild';
@@ -35,6 +36,8 @@ const common = {
 
 const entries = [
   { in: 'src/adapters/netflix/main.ts', out: 'netflix-main' },
+  { in: 'src/adapters/disneyplus/main.ts', out: 'disneyplus-main' },
+  { in: 'src/adapters/hulu/main.ts', out: 'hulu-main' },
   { in: 'src/adapters/mock/main.ts', out: 'mock-main' },
   { in: 'src/content.tsx', out: 'content' },
   { in: 'src/background.ts', out: 'background' },

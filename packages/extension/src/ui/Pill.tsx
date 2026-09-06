@@ -1,4 +1,5 @@
 import { ChevronDown } from 'lucide-react';
+import { currentService } from '../adapters/services.js';
 import type { SyncSnapshot } from '../sync/SyncEngine.js';
 import type { AdapterView } from './useAdapter.js';
 
@@ -16,7 +17,7 @@ export function Pill({ view, sync, idle, cardOpen, blocked, onClick }: Props) {
   let dot = 'sb-pill__dot';
   let sub: string;
   if (blocked === 'concurrent') { dot += ' sb-pill__dot--warn'; sub = 'Netflix is open elsewhere'; }
-  else if (!connected || !state.contentId) { sub = sync.roomId ? 'Open the title' : 'Waiting for Netflix'; }
+  else if (!connected || !state.contentId) { sub = sync.roomId ? 'Open the title' : `Waiting for ${currentService()?.name ?? 'the player'}`; }
   else if (!state.ready) { dot += ' sb-pill__dot--warn'; sub = 'Loading player'; }
   else if (health.path === 'none') { dot += ' sb-pill__dot--bad'; sub = 'No player'; }
   else if (sync.roomId) {

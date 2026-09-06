@@ -1,11 +1,12 @@
 /**
  * Isolated-world content script. Mounts the overlay in a Shadow DOM so
- * Netflix's CSS cannot reach it, and talks to the MAIN-world adapter.
+ * the service's CSS cannot reach it, and talks to the MAIN-world adapter.
  */
 import { createRoot } from 'react-dom/client';
 import { AdapterProxy } from './bridge/AdapterProxy.js';
 import { roomCode } from '@sideby/shared';
-import { buildInviteLink, clearPendingJoin, consumeInviteParam, contentIdFromPath, getPendingJoin, isLoginOrGate, isUnavailable, markUnavailable, netflixShowsConcurrentStreams, netflixShowsUnavailable, setPendingJoin, type PendingJoin } from './invite.js';
+import { currentService } from './adapters/services.js';
+import { buildInviteLink, clearPendingJoin, consumeInviteParam, contentIdFromPath, getPendingJoin, isLoginOrGate, isUnavailable, markUnavailable, netflixShowsConcurrentStreams, serviceShowsUnavailable, setPendingJoin, watchUrl, type PendingJoin } from './invite.js';
 import { PeerCall } from './rtc/PeerCall.js';
 import { getMemberId, getMemberToken, getStoredRoom, getTransportPreference, setStoredRoom, setTransportPreference } from './storage.js';
 import { SyncEngine } from './sync/SyncEngine.js';
@@ -117,7 +118,14 @@ async function mount() {
   let inviteLink: string | null = null;
   let unavailable = false;
   let blocked: 'concurrent' | null = null;
-  const isNetflix = location.hostname.endsWith('netflix.com');
+  /** The streaming service this page belongs to; null on the dev mock page, which never navigates. */
+  const service = currentService();
+  const isNetflix = service?.id === 'netflix';
+  /** Navigate this tab to a title on the current service (no-op off-service). */
+  const goToTitle = (contentId: string) => {
+    const url = watchUrl(contentId);
+    if (url) location.assign(url);
+  };
   /** Current title id: the adapter knows best; the URL is the fallback before it attaches. */
   const currentContentId = () => adapter.getState().contentId ?? contentIdFromPath();
 
@@ -141,17 +149,17 @@ async function mount() {
   const continuePendingJoin = async (pending: PendingJoin) => {
     const here = currentContentId();
     if (pending.contentId && here !== pending.contentId) {
-      if (isLoginOrGate()) return; // Netflix is handling sign-in; we'll be back.
+      if (!service || isLoginOrGate()) return; // The service is handling sign-in; we'll be back.
       if (await isUnavailable(pending.contentId)) { unavailable = true; render(); return; }
       if (pending.navAttempts >= 2) {
-        // Netflix keeps bouncing us away from this title: treat as unavailable.
+        // The service keeps bouncing us away from this title: treat as unavailable.
         await markUnavailable(pending.contentId);
         unavailable = true;
         render();
         return;
       }
       await setPendingJoin({ ...pending, navAttempts: pending.navAttempts + 1 });
-      location.assign(`https://www.netflix.com/watch/${pending.contentId}`);
+      goToTitle(pending.contentId);
       return;
     }
     if (transportKind !== 'ws') setTransport('ws');
@@ -168,12 +176,12 @@ async function mount() {
     const snap = engine.getSnapshot();
     if (!snap.roomId || !snap.timeline?.contentId) return;
     const target = snap.timeline.contentId;
-    if (isNetflix && snap.contentMismatch && navigatedTo !== target && !isLoginOrGate()) {
+    if (service && snap.contentMismatch && navigatedTo !== target && !isLoginOrGate()) {
       navigatedTo = target;
       void isUnavailable(target).then((bad) => {
         if (bad) { unavailable = true; render(); return; }
-        void setPendingJoin({ roomId: snap.roomId!, contentId: target, createdAtMs: Date.now(), navAttempts: 1 });
-        location.assign(`https://www.netflix.com/watch/${target}`);
+        void setPendingJoin({ roomId: snap.roomId!, contentId: target, service: service.id, createdAtMs: Date.now(), navAttempts: 1 });
+        goToTitle(target);
       });
     }
   });
@@ -184,7 +192,7 @@ async function mount() {
   render();
   if (__DEV__) console.info('[sideby] overlay mounted as', memberId);
 
-  // Arriving via an invite link? Remember it before Netflix redirects us anywhere.
+  // Arriving via an invite link? Remember it before the service redirects us anywhere.
   const fromLink = consumeInviteParam();
   if (fromLink) await setPendingJoin(fromLink);
   const pending = fromLink ?? (await getPendingJoin());
@@ -196,10 +204,10 @@ async function mount() {
     if (stored && Date.now() - stored.joinedAtMs < 6 * 60 * 60 * 1000) {
       if (stored.transport !== transportKind) setTransport(stored.transport);
       const here = currentContentId();
-      if (isNetflix && here && stored.contentId && here !== stored.contentId && !isLoginOrGate()) {
+      if (service && here && stored.contentId && here !== stored.contentId && !isLoginOrGate()) {
         // We came back on a different page (e.g. /browse after a refresh); go to the title.
-        void setPendingJoin({ roomId: stored.roomId, contentId: stored.contentId, createdAtMs: Date.now(), navAttempts: 1 });
-        location.assign(`https://www.netflix.com/watch/${stored.contentId}`);
+        void setPendingJoin({ roomId: stored.roomId, contentId: stored.contentId, service: service.id, createdAtMs: Date.now(), navAttempts: 1 });
+        goToTitle(stored.contentId);
       } else {
         if (stored.contentId) inviteLink = buildInviteLink(stored.contentId, stored.roomId);
         join(stored.roomId);
@@ -208,12 +216,12 @@ async function mount() {
     }
   }
 
-  // If Netflix refuses the title, say why instead of looping or guessing.
+  // If the service refuses the title, say why instead of looping or guessing.
   const checkRefusal = () => {
-    if (!isNetflix || adapter.getState().ready) return;
-    if (netflixShowsConcurrentStreams()) { blocked = 'concurrent'; render(); return; }
+    if (!service || adapter.getState().ready) return;
+    if (isNetflix && netflixShowsConcurrentStreams()) { blocked = 'concurrent'; render(); return; }
     const id = contentIdFromPath();
-    if (id && netflixShowsUnavailable()) { void markUnavailable(id); unavailable = true; render(); }
+    if (id && serviceShowsUnavailable()) { void markUnavailable(id); unavailable = true; render(); }
   };
   window.setTimeout(checkRefusal, 6_000);
   window.setTimeout(checkRefusal, 15_000);

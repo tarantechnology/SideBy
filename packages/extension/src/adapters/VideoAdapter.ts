@@ -1,4 +1,5 @@
 import type { PlayerState } from '@sideby/shared';
+import type { ServiceId } from './services.js';
 
 export type { PlayerState };
 
@@ -11,7 +12,12 @@ export interface ContentInfo {
   url: string;
 }
 
-export type ControlPath = 'netflix-api' | 'video-element' | 'none';
+/**
+ * How the adapter is driving the player: the service's own JS player API
+ * (best: keeps its UI and seek logic in step), the bare <video> element,
+ * or nothing yet.
+ */
+export type ControlPath = 'native-api' | 'video-element' | 'none';
 
 export interface AdapterHealth {
   path: ControlPath;
@@ -26,6 +32,8 @@ export interface AdapterHealth {
   failedCalls: number;
   consecutiveReadErrors: number;
   lastError: string | null;
+  /** True while the service plays an ad; the reported state is frozen at the content position. */
+  adBreak?: boolean;
 }
 
 export type AdapterEvent =
@@ -37,11 +45,11 @@ export type AdapterEvent =
 export type AdapterListener = (event: AdapterEvent) => void;
 
 /**
- * The only thing the rest of Sideby knows about a streaming service.
- * Everything Netflix-specific stays behind this interface.
+ * The only thing the rest of Sideby knows about a streaming service's player.
+ * Everything service-specific stays behind this interface.
  */
 export interface VideoAdapter {
-  readonly service: string;
+  readonly service: ServiceId | string;
   getState(): PlayerState;
   getContentInfo(): ContentInfo;
   getHealth(): AdapterHealth;

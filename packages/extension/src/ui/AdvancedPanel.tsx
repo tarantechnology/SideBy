@@ -83,7 +83,7 @@ export function AdvancedPanel({ adapter, view, engine, onJoin, onLeave, transpor
 
       <Section title="Adapter">
         <dl className="sb-kv">
-          <dt>Control path</dt><dd className={health.path === 'netflix-api' ? 'sb-ok' : health.path === 'video-element' ? 'sb-warn' : 'sb-bad'}>{health.path}</dd>
+          <dt>Control path</dt><dd className={health.path === 'native-api' ? 'sb-ok' : health.path === 'video-element' ? 'sb-warn' : 'sb-bad'}>{health.path}{health.adBreak ? ' · ad break' : ''}</dd>
           <dt>Calls</dt><dd>play {health.playCalls} · pause {health.pauseCalls} · seek {health.seekCalls} · rate {health.rateCalls}</dd>
           <dt>Failures</dt><dd className={health.failedCalls ? 'sb-warn' : ''}>{health.failedCalls}{health.consecutiveReadErrors ? ` (${health.consecutiveReadErrors} in a row)` : ''}</dd>
           <dt>Attached</dt><dd>{health.attachedAtMs ? formatDurationShort(Date.now() - health.attachedAtMs) : '—'}</dd>
