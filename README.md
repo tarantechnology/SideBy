@@ -14,6 +14,14 @@ Sideby never screen-shares, captures, proxies, or interferes with Netflix's vide
 | `tools/chrome` | Launch a dedicated Chrome profile and drive it over CDP for real-Netflix testing |
 | `dev/mock-player` | Plain `<video>` page implementing the same adapter, for automated sync tests |
 
+## Use
+
+1. Open a movie or episode on Netflix and click the Sideby toolbar icon (or the Sideby pill).
+2. **Invite a friend** copies a link like `netflix.com/watch/<id>?sideby=<room>`.
+3. Your friend opens it with Sideby installed. Netflix handles sign-in, profile, and PIN as usual; Sideby resumes the join once they land on the title. If they are on the wrong title, Sideby takes them to the right one. If the title is not on their plan or region, Sideby says so and stops.
+4. When both players are ready, **Start together** counts down against server time and both Netflix players start on the same instant.
+5. Play, pause, or seek on either side and the other follows. Drift is corrected continuously. Buffering on one side pauses both and resumes them together.
+
 ## Develop
 
 ```bash

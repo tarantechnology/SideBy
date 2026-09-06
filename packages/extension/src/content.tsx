@@ -4,6 +4,8 @@
  */
 import { createRoot } from 'react-dom/client';
 import { AdapterProxy } from './bridge/AdapterProxy.js';
+import { roomCode } from '@sideby/shared';
+import { buildInviteLink, clearPendingJoin, consumeInviteParam, contentIdFromPath, getPendingJoin, isLoginOrGate, isUnavailable, markUnavailable, netflixShowsUnavailable, setPendingJoin, type PendingJoin } from './invite.js';
 import { PeerCall } from './rtc/PeerCall.js';
 import { getMemberId, getMemberToken, getStoredRoom, getTransportPreference, setStoredRoom, setTransportPreference } from './storage.js';
 import { SyncEngine } from './sync/SyncEngine.js';
@@ -58,7 +60,7 @@ async function mount() {
   }, true);
 
   chrome.runtime.onMessage.addListener((msg: { type?: string }) => {
-    if (msg?.type === 'sideby:toggle') bus.dispatchEvent(new Event('toggle-debug'));
+    if (msg?.type === 'sideby:toggle') bus.dispatchEvent(new Event('toggle-card'));
   });
 
   // Long-lived port: keeps the service worker awake for dev reload and,
@@ -86,7 +88,7 @@ async function mount() {
   setupCall();
 
   const join = (roomId: string) => {
-    void setStoredRoom({ roomId, transport: transportKind, joinedAtMs: Date.now() });
+    void setStoredRoom({ roomId, transport: transportKind, joinedAtMs: Date.now(), contentId: contentIdFromPath() });
     void engine.join(roomId).catch((err) => console.warn('[sideby] join failed', err));
     // Camera is opt-in per session and must never gate sync.
     if (call && call.getSnapshot().media === 'off') void call.enableMedia();
@@ -98,26 +100,118 @@ async function mount() {
     void setTransportPreference(kind);
     transport = makeTransport(kind);
     engine = new SyncEngine(adapter, transport);
+    unfollow();
+    unfollow = followRoomContent();
     setupCall();
     render();
   };
   const leave = () => {
     void setStoredRoom(null);
+    void clearPendingJoin();
     engine.leave();
     call?.disableMedia();
+    inviteLink = null;
+    render();
   };
 
+  let inviteLink: string | null = null;
+  let unavailable = false;
+
+  /** Host flow: create a server room for the current title and hand back a link. */
+  const invite = () => {
+    const contentId = adapter.getState().contentId;
+    if (!contentId) return;
+    if (transportKind !== 'ws') setTransport('ws');
+    const roomId = roomCode();
+    inviteLink = buildInviteLink(contentId, roomId);
+    join(roomId);
+    void navigator.clipboard.writeText(inviteLink).catch(() => undefined);
+    bus.dispatchEvent(new Event('open-card'));
+    render();
+  };
+
+  /**
+   * Guest flow. The link may land on login, a profile gate, or the wrong
+   * page; the pending record survives all of that until we are on the title.
+   */
+  const continuePendingJoin = async (pending: PendingJoin) => {
+    const here = contentIdFromPath();
+    if (pending.contentId && here !== pending.contentId) {
+      if (isLoginOrGate()) return; // Netflix is handling sign-in; we'll be back.
+      if (await isUnavailable(pending.contentId)) { unavailable = true; render(); return; }
+      if (pending.navAttempts >= 2) {
+        // Netflix keeps bouncing us away from this title: treat as unavailable.
+        await markUnavailable(pending.contentId);
+        unavailable = true;
+        render();
+        return;
+      }
+      await setPendingJoin({ ...pending, navAttempts: pending.navAttempts + 1 });
+      location.assign(`https://www.netflix.com/watch/${pending.contentId}`);
+      return;
+    }
+    if (transportKind !== 'ws') setTransport('ws');
+    if (pending.contentId) inviteLink = buildInviteLink(pending.contentId, pending.roomId);
+    join(pending.roomId);
+    await clearPendingJoin();
+    bus.dispatchEvent(new Event('open-card'));
+    render();
+  };
+
+  /** Follow the room when it moves to another title (friend navigated, or autoplay). */
+  let navigatedTo: string | null = null;
+  const followRoomContent = () => engine.subscribe(() => {
+    const snap = engine.getSnapshot();
+    if (!snap.roomId || !snap.timeline?.contentId) return;
+    const target = snap.timeline.contentId;
+    if (snap.contentMismatch && navigatedTo !== target && !isLoginOrGate()) {
+      navigatedTo = target;
+      void isUnavailable(target).then((bad) => {
+        if (bad) { unavailable = true; render(); return; }
+        void setPendingJoin({ roomId: snap.roomId!, contentId: target, createdAtMs: Date.now(), navAttempts: 1 });
+        location.assign(`https://www.netflix.com/watch/${target}`);
+      });
+    }
+  });
+  let unfollow = followRoomContent();
+
   const root = createRoot(mountPoint);
-  const render = () => root.render(<App adapter={adapter} engine={engine} call={call} bus={bus} onJoin={join} onLeave={leave} transportKind={transportKind} onTransportChange={setTransport} />);
+  const render = () => root.render(<App adapter={adapter} engine={engine} call={call} bus={bus} onJoin={join} onLeave={leave} onInvite={invite} inviteLink={inviteLink} unavailable={unavailable} transportKind={transportKind} onTransportChange={setTransport} />);
   render();
   if (__DEV__) console.info('[sideby] overlay mounted as', memberId);
 
-  // Refresh or navigation must not lose the room: rejoin what we were in.
-  const stored = await getStoredRoom();
-  if (stored && Date.now() - stored.joinedAtMs < 6 * 60 * 60 * 1000) {
-    if (stored.transport !== transportKind) setTransport(stored.transport);
-    join(stored.roomId);
+  // Arriving via an invite link? Remember it before Netflix redirects us anywhere.
+  const fromLink = consumeInviteParam();
+  if (fromLink) await setPendingJoin(fromLink);
+  const pending = fromLink ?? (await getPendingJoin());
+  if (pending) {
+    await continuePendingJoin(pending);
+  } else {
+    // Refresh or navigation must not lose the room: rejoin what we were in.
+    const stored = await getStoredRoom();
+    if (stored && Date.now() - stored.joinedAtMs < 6 * 60 * 60 * 1000) {
+      if (stored.transport !== transportKind) setTransport(stored.transport);
+      const here = contentIdFromPath();
+      if (here && stored.contentId && here !== stored.contentId && !isLoginOrGate()) {
+        // We came back on a different page (e.g. /browse after a refresh); go to the title.
+        void setPendingJoin({ roomId: stored.roomId, contentId: stored.contentId, createdAtMs: Date.now(), navAttempts: 1 });
+        location.assign(`https://www.netflix.com/watch/${stored.contentId}`);
+      } else {
+        if (stored.contentId) inviteLink = buildInviteLink(stored.contentId, stored.roomId);
+        join(stored.roomId);
+      }
+    }
   }
+
+  // If Netflix refuses the title after we navigated there, say so instead of looping.
+  window.setTimeout(() => {
+    const id = contentIdFromPath();
+    if (id && !adapter.getState().ready && netflixShowsUnavailable()) {
+      void markUnavailable(id);
+      unavailable = true;
+      render();
+    }
+  }, 12_000);
 
   // Test bridge: the MAIN world (and automation running there) can drive
   // the engine over postMessage, since isolated-world globals are invisible.

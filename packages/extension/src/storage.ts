@@ -9,6 +9,7 @@ export interface StoredRoom {
   roomId: string;
   transport: 'local' | 'ws';
   joinedAtMs: number;
+  contentId?: string | null;
 }
 
 /** Stable per-browser identity; created on first use. */

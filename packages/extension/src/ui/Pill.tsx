@@ -8,13 +8,14 @@ interface Props {
   idle: boolean;
   debugOpen: boolean;
   onToggleDebug: () => void;
+  onClick: () => void;
 }
 
-export function Pill({ view, sync, idle, debugOpen, onToggleDebug }: Props) {
+export function Pill({ view, sync, idle, debugOpen, onToggleDebug, onClick }: Props) {
   const { state, connected, health } = view;
   let dot = 'sb-pill__dot';
   let sub: string;
-  if (!connected || !state.contentId) { sub = 'Waiting for Netflix'; }
+  if (!connected || !state.contentId) { sub = sync.roomId ? 'Open the title' : 'Waiting for Netflix'; }
   else if (!state.ready) { dot += ' sb-pill__dot--warn'; sub = 'Loading player'; }
   else if (health.path === 'none') { dot += ' sb-pill__dot--bad'; sub = 'No player'; }
   else if (sync.roomId) {
@@ -29,11 +30,11 @@ export function Pill({ view, sync, idle, debugOpen, onToggleDebug }: Props) {
   else { dot += ' sb-pill__dot--ok'; sub = state.playing ? 'Playing' : 'Paused'; }
 
   return (
-    <div className={`sb-pill sb-material${idle && !debugOpen ? ' sb-pill--idle' : ''}`}>
+    <div className={`sb-pill sb-material${idle && !debugOpen ? ' sb-pill--idle' : ''}`} onClick={onClick} role="button" title="Sideby">
       <span className={dot} />
       <span className="sb-pill__label">Sideby</span>
       <span className="sb-pill__sub">· {sub}</span>
-      <button className="sb-pill__btn" title="Debug panel (⌘⇧D)" onClick={onToggleDebug} aria-pressed={debugOpen}>
+      <button className="sb-pill__btn" title="Debug panel (⌘⇧D)" onClick={(e) => { e.stopPropagation(); onToggleDebug(); }} aria-pressed={debugOpen}>
         <Bug size={13} strokeWidth={2} />
       </button>
     </div>
