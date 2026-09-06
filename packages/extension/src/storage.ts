@@ -1,44 +1,65 @@
 import { randomId } from '@sideby/shared';
 
 /**
- * Identity and room membership are per tab (sessionStorage): a tab is one
- * seat in a room, a refresh keeps the seat, and a second tab is a second
- * seat rather than a takeover. Preferences are per browser (chrome.storage).
+ * Identity and the current room belong to the browser session
+ * (chrome.storage.session): a room follows you from tab to tab and site to
+ * site, the server hands the seat to whichever tab joined last, and a fresh
+ * browser starts clean. Preferences are per browser (chrome.storage.local).
+ *
+ * The dev mock page keeps a per-tab identity so it can stand in for a
+ * second person next to a real service tab.
  */
 const KEY_MEMBER = 'sideby:memberId';
 const KEY_TOKEN = 'sideby:memberToken';
 const KEY_ROOM = 'sideby:room';
 const KEY_TRANSPORT = 'sideby:transport';
 
-function tabGet(key: string): string | null {
-  try { return sessionStorage.getItem(key); } catch { return null; }
+const perTab = location.pathname.startsWith('/mock');
+
+async function get(key: string): Promise<string | null> {
+  if (perTab) {
+    try { return sessionStorage.getItem(key); } catch { return null; }
+  }
+  const area = chrome.storage.session ?? chrome.storage.local;
+  const got = await area.get(key);
+  const value = got[key];
+  return typeof value === 'string' && value ? value : null;
 }
-function tabSet(key: string, value: string | null): void {
-  try { value === null ? sessionStorage.removeItem(key) : sessionStorage.setItem(key, value); } catch { /* storage blocked */ }
+
+async function set(key: string, value: string | null): Promise<void> {
+  if (perTab) {
+    try { value === null ? sessionStorage.removeItem(key) : sessionStorage.setItem(key, value); } catch { /* storage blocked */ }
+    return;
+  }
+  const area = chrome.storage.session ?? chrome.storage.local;
+  if (value === null) await area.remove(key);
+  else await area.set({ [key]: value });
 }
 
 export interface StoredRoom {
   roomId: string;
   transport: 'local' | 'ws';
   joinedAtMs: number;
+  /** Raw title id on `service`, when the room was joined from a title. */
   contentId?: string | null;
+  service?: string | null;
 }
 
-/** Per-tab identity; created on first use, survives refresh. */
+/** Session identity; created on first use. */
 export async function getMemberId(): Promise<string> {
-  const existing = tabGet(KEY_MEMBER);
+  const existing = await get(KEY_MEMBER);
   if (existing) return existing;
   const id = randomId(10);
-  tabSet(KEY_MEMBER, id);
+  await set(KEY_MEMBER, id);
   return id;
 }
 
 /** Secret proving ownership of the member id to the server. */
 export async function getMemberToken(): Promise<string> {
-  const existing = tabGet(KEY_TOKEN);
+  const existing = await get(KEY_TOKEN);
   if (existing) return existing;
   const token = randomId(32);
-  tabSet(KEY_TOKEN, token);
+  await set(KEY_TOKEN, token);
   return token;
 }
 
@@ -52,7 +73,7 @@ export async function setTransportPreference(kind: 'local' | 'ws'): Promise<void
 }
 
 export async function getStoredRoom(): Promise<StoredRoom | null> {
-  const raw = tabGet(KEY_ROOM);
+  const raw = await get(KEY_ROOM);
   if (!raw) return null;
   try {
     const room = JSON.parse(raw) as StoredRoom;
@@ -63,5 +84,5 @@ export async function getStoredRoom(): Promise<StoredRoom | null> {
 }
 
 export async function setStoredRoom(room: StoredRoom | null): Promise<void> {
-  tabSet(KEY_ROOM, room ? JSON.stringify(room) : null);
+  await set(KEY_ROOM, room ? JSON.stringify(room) : null);
 }

@@ -24,6 +24,8 @@ export const ReadinessSchema = z.object({
   contentMatch: z.boolean(),
   playerReady: z.boolean(),
   cameraReady: z.boolean(),
+  /** True when this member has no player (hanging out); the friend sees it as such. */
+  hangout: z.boolean().optional(),
 });
 export type Readiness = z.infer<typeof ReadinessSchema>;
 

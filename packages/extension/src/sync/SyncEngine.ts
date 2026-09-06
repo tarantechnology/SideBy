@@ -1,4 +1,5 @@
 import { messageId, resolveAt, type Intent, type IntentEnvelope, type PlayerState, type Readiness, type RoomTimeline } from '@sideby/shared';
+import { contentKey, parseContentKey, type ContentRef } from '../adapters/services.js';
 import type { VideoAdapter } from '../adapters/VideoAdapter.js';
 import type { MemberInfo, Transport, TransportStatus } from '../transport/Transport.js';
 import { DEFAULT_SYNC_CONFIG, type SyncConfig } from './config.js';
@@ -29,6 +30,17 @@ export interface SyncSnapshot {
   holding: boolean;
   /** The other member, if any. */
   peer: MemberInfo | null;
+  /** The title the room is on, if any, resolvable from any tab. */
+  roomContent: ContentRef | null;
+}
+
+export interface SyncEngineOptions {
+  /** Qualifies this player's title ids for the room ("netflix:70158900"); null when this tab has no player. */
+  contentPrefix?: string | null;
+  /** This tab is only here to hang out: no player, readiness says so, nothing to sync. */
+  hangout?: boolean;
+  /** Whether the service has let us past sign-in. Defaults to "on a title, or the player is ready". */
+  loggedIn?: () => boolean;
 }
 
 type Expectation =
@@ -68,7 +80,16 @@ export class SyncEngine {
   private cameraReady = false;
   private lastReadiness: Readiness | null = null;
 
-  constructor(private readonly adapter: VideoAdapter, private readonly transport: Transport) {}
+  constructor(
+    private readonly adapter: VideoAdapter,
+    private readonly transport: Transport,
+    private readonly opts: SyncEngineOptions = {},
+  ) {}
+
+  /** The room-side key for a raw title id on this tab's service. */
+  private key(contentId: string | null): string | null {
+    return contentId && this.opts.contentPrefix ? contentKey(this.opts.contentPrefix, contentId) : null;
+  }
 
   // ---------------------------------------------------------------- public
 
@@ -92,15 +113,16 @@ export class SyncEngine {
       }
     });
     this.tickTimer = window.setInterval(() => this.tick(), this.config.tickMs);
-    await this.transport.join(roomId, this.adapter.getState().contentId);
+    await this.transport.join(roomId, this.key(this.adapter.getState().contentId));
     // The first snapshot follows the join acknowledgement; give it a moment.
     for (let i = 0; i < 20 && !this.timeline; i++) await new Promise((r) => window.setTimeout(r, 50));
     const state = this.adapter.getState();
-    if (state.contentId && this.timeline && !this.timeline.contentId) {
-      this.sendIntent({ kind: 'setContent', contentId: state.contentId });
+    const mine = this.key(state.contentId);
+    if (mine && this.timeline && !this.timeline.contentId) {
+      this.sendIntent({ kind: 'setContent', contentId: mine });
     }
     // Alone in the room: the room should reflect where we are, not reset us.
-    if (this.members.length <= 1 && state.ready && this.timeline && this.timeline.contentId === state.contentId) {
+    if (this.members.length <= 1 && state.ready && this.timeline && this.timeline.contentId === mine) {
       this.sendIntent({ kind: 'seek', mediaMs: state.currentTimeMs, playing: state.playing });
     }
     this.reportReadiness();
@@ -169,7 +191,7 @@ export class SyncEngine {
       expectedMs: this.lastExpectedMs,
       driftMs: this.lastDriftMs,
       correction: this.lastCorrection,
-      contentMismatch: !!(this.timeline?.contentId && state.contentId && this.timeline.contentId !== state.contentId),
+      contentMismatch: !!(this.timeline?.contentId && this.key(state.contentId) && this.timeline.contentId !== this.key(state.contentId)),
       startsInMs: resolved?.startsInMs ?? 0,
       roomPlaying: resolved?.playing ?? false,
       seekLeadMs: Math.round(this.seekLeadMs),
@@ -181,6 +203,7 @@ export class SyncEngine {
       readiness: this.computeReadiness(state),
       holding: this.holding,
       peer: this.members.find((m) => m.memberId !== this.transport.memberId) ?? null,
+      roomContent: parseContentKey(this.timeline?.contentId),
     };
     return this.snapshotCache;
   }
@@ -221,10 +244,16 @@ export class SyncEngine {
   }
 
   private computeReadiness(state: PlayerState): Readiness {
+    const roomContent = this.timeline?.contentId ?? null;
+    if (this.opts.hangout) {
+      // Nothing to match or load here; once the room has a title, this tab is "not on it".
+      return { loggedIn: true, contentMatch: !roomContent, playerReady: false, cameraReady: this.cameraReady, hangout: true };
+    }
+    const mine = this.key(state.contentId);
     return {
       // On a title page (the adapter parsed an id) the service let us through sign-in.
-      loggedIn: !!state.contentId || state.ready,
-      contentMatch: !!state.contentId && (!this.timeline?.contentId || this.timeline.contentId === state.contentId),
+      loggedIn: this.opts.loggedIn ? this.opts.loggedIn() : !!state.contentId || state.ready,
+      contentMatch: !!mine && (!roomContent || roomContent === mine),
       playerReady: state.ready,
       cameraReady: this.cameraReady,
     };
@@ -304,9 +333,10 @@ export class SyncEngine {
   }
 
   private onContentChange(contentId: string): void {
-    if (!this.timeline || this.timeline.contentId === contentId) return;
+    const mine = this.key(contentId);
+    if (!mine || !this.timeline || this.timeline.contentId === mine) return;
     // The service auto-advanced (or the user picked a new title): move the room.
-    this.sendIntent({ kind: 'setContent', contentId });
+    this.sendIntent({ kind: 'setContent', contentId: mine });
   }
 
   // ------------------------------------------------------------ applying
@@ -330,7 +360,7 @@ export class SyncEngine {
     if (!state.ready) return;
     // A brand-new room (nobody has acted yet) has nothing to impose.
     if (tl.revision <= 1 && this.members.length <= 1 && !tl.playing && tl.anchorMediaMs === 0) return;
-    if (tl.contentId && state.contentId && tl.contentId !== state.contentId) return; // handled by preflight later
+    if (tl.contentId && this.key(state.contentId) && tl.contentId !== this.key(state.contentId)) return; // handled by preflight later
 
     const now = this.transport.serverNow();
     const resolved = resolveAt(tl, now);

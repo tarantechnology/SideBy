@@ -9,15 +9,24 @@ interface Props {
   idle: boolean;
   cardOpen: boolean;
   blocked: 'concurrent' | null;
+  moved: boolean;
+  hangout: boolean;
   onClick: () => void;
 }
 
-export function Pill({ view, sync, idle, cardOpen, blocked, onClick }: Props) {
+export function Pill({ view, sync, idle, cardOpen, blocked, moved, hangout, onClick }: Props) {
   const { state, connected, health } = view;
   let dot = 'sb-pill__dot';
   let sub: string;
   if (blocked === 'concurrent') { dot += ' sb-pill__dot--warn'; sub = 'Netflix is open elsewhere'; }
-  else if (!connected || !state.contentId) { sub = sync.roomId ? 'Open the title' : `Waiting for ${currentService()?.name ?? 'the player'}`; }
+  else if (moved) { dot += ' sb-pill__dot--warn'; sub = 'In another tab'; }
+  else if (hangout) {
+    if (!sync.roomId) sub = 'Ready';
+    else if (sync.status !== 'connected') { dot += ' sb-pill__dot--warn'; sub = 'Connecting'; }
+    else if (sync.roomContent) { dot += ' sb-pill__dot--warn'; sub = 'Friend is watching'; }
+    else { dot += ' sb-pill__dot--ok'; sub = sync.peer ? 'Hanging out' : 'Waiting for friend'; }
+  }
+  else if (!connected || !state.contentId) { sub = sync.roomId ? (sync.roomContent ? 'Open the title' : 'Pick a title') : `Waiting for ${currentService()?.name ?? 'the player'}`; }
   else if (!state.ready) { dot += ' sb-pill__dot--warn'; sub = 'Loading player'; }
   else if (health.path === 'none') { dot += ' sb-pill__dot--bad'; sub = 'No player'; }
   else if (sync.roomId) {

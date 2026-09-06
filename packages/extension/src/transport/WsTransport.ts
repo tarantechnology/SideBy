@@ -201,7 +201,7 @@ export class WsTransport implements Transport {
         if (FATAL_CODES.has(msg.code)) {
           this.wantConnected = false;
           this.teardown();
-          this.setStatus('closed', msg.message);
+          this.setStatus('closed', msg.code);
         } else {
           console.warn('[sideby] server error', msg.code, msg.message);
         }

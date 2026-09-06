@@ -5,8 +5,12 @@
  *   https://www.disneyplus.com/play/<contentId>?sideby=<roomId>
  *   https://www.hulu.com/watch/<contentId>?sideby=<roomId>
  * The domain carries the service; the service registry carries the rest.
+ * A room started without a title links to the room server instead:
+ *   <server>/join/<roomId>
  */
 import { currentService, type ServiceId } from './adapters/services.js';
+
+declare const __SERVER_HTTP__: string;
 
 const PARAM = 'sideby';
 const KEY_PENDING = 'sideby:pending';
@@ -23,8 +27,10 @@ export interface PendingJoin {
   navAttempts: number;
 }
 
-export function buildInviteLink(contentId: string, roomId: string): string {
-  const url = new URL(watchUrl(contentId) ?? location.href);
+export function buildInviteLink(contentId: string | null, roomId: string): string {
+  const title = contentId ? watchUrl(contentId) : null;
+  if (!title) return `${__SERVER_HTTP__}/join/${encodeURIComponent(roomId)}`;
+  const url = new URL(title);
   url.searchParams.set(PARAM, roomId);
   return url.toString();
 }
@@ -42,11 +48,15 @@ export function isLoginOrGate(pathname: string = location.pathname): boolean {
   return currentService()?.isLoginOrGate(pathname) ?? false;
 }
 
-/** Reads and strips ?sideby= from the current URL. */
+/** Reads and strips ?sideby= from the current URL, or reads the room from a /join/<roomId> page. */
 export function consumeInviteParam(): PendingJoin | null {
   const url = new URL(location.href);
   const roomId = url.searchParams.get(PARAM);
-  if (!roomId) return null;
+  if (!roomId) {
+    if (location.origin !== __SERVER_HTTP__) return null;
+    const fromPath = /^\/join\/([A-Za-z0-9_-]{2,64})\/?$/.exec(location.pathname)?.[1];
+    return fromPath ? { roomId: fromPath, contentId: null, service: null, createdAtMs: Date.now(), navAttempts: 0 } : null;
+  }
   url.searchParams.delete(PARAM);
   history.replaceState(history.state, '', url.toString());
   return { roomId, contentId: contentIdFromPath(url.pathname), service: currentService()?.id ?? null, createdAtMs: Date.now(), navAttempts: 0 };

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DISNEYPLUS, HULU, NETFLIX, SERVICES, serviceForHost, serviceForUrl } from '../src/adapters/services.js';
+import { contentKey, DISNEYPLUS, HULU, NETFLIX, parseContentKey, SERVICES, serviceForHost, serviceForUrl } from '../src/adapters/services.js';
 
 describe('service registry', () => {
   it('resolves a service from its hosts and nothing else', () => {
@@ -68,5 +68,19 @@ describe('Hulu paths', () => {
     expect(HULU.isLoginOrGate('/welcome')).toBe(true);
     expect(HULU.isLoginOrGate('/hub/home')).toBe(false);
     expect(HULU.isLoginOrGate(`/watch/${id}`)).toBe(false);
+  });
+});
+
+describe('content keys', () => {
+  it('qualifies a title with its service and parses it back', () => {
+    expect(contentKey('netflix', '70158900')).toBe('netflix:70158900');
+    expect(parseContentKey('netflix:70158900')).toEqual({ serviceId: 'netflix', contentId: '70158900' });
+    expect(parseContentKey('disneyplus:3fbf3f6b-3b1b-4a1c-9f1a-2c1a5c9e7d21')).toEqual({ serviceId: 'disneyplus', contentId: '3fbf3f6b-3b1b-4a1c-9f1a-2c1a5c9e7d21' });
+  });
+  it('rejects keys without a service', () => {
+    expect(parseContentKey('70158900')).toBeNull();
+    expect(parseContentKey(':x')).toBeNull();
+    expect(parseContentKey('netflix:')).toBeNull();
+    expect(parseContentKey(null)).toBeNull();
   });
 });

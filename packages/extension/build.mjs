@@ -14,6 +14,10 @@ const watch = process.argv.includes('--watch');
 const dev = watch || process.argv.includes('--dev');
 const DEV_PORT = 8788;
 
+const SERVER_URL = process.env.SIDEBY_SERVER_URL ?? 'ws://localhost:8787/ws';
+/** The room server also serves pages (join links, lobby, mock player). */
+const SERVER_HTTP = SERVER_URL.replace(/^ws/, 'http').replace(/\/ws\/?$/, '');
+
 let buildId = String(Date.now());
 
 /** @type {import('esbuild').BuildOptions} */
@@ -28,7 +32,8 @@ const common = {
   jsx: 'automatic',
   define: {
     __DEV__: JSON.stringify(dev),
-    __SERVER_URL__: JSON.stringify(process.env.SIDEBY_SERVER_URL ?? 'ws://localhost:8787/ws'),
+    __SERVER_URL__: JSON.stringify(SERVER_URL),
+    __SERVER_HTTP__: JSON.stringify(SERVER_HTTP),
     'process.env.NODE_ENV': JSON.stringify(dev ? 'development' : 'production'),
   },
   outdir: dist,
@@ -45,7 +50,9 @@ const entries = [
 
 async function copyStatic() {
   await mkdir(dist, { recursive: true });
-  await cp(join(here, 'manifest.json'), join(dist, 'manifest.json'));
+  // The manifest names the dev server; point its matches at the configured one.
+  const manifest = (await readFile(join(here, 'manifest.json'), 'utf8')).replaceAll('http://localhost:8787/', `${SERVER_HTTP}/`);
+  await writeFile(join(dist, 'manifest.json'), manifest);
   await cp(join(here, 'icons'), join(dist, 'icons'), { recursive: true });
   await writeFile(join(dist, 'build-id.txt'), buildId);
 }

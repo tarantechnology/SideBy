@@ -16,9 +16,17 @@ const ICE_SERVERS = process.env.ICE_SERVERS_JSON
 const store = new MemoryRoomStore();
 const service = new RoomService(store, () => Date.now(), ICE_SERVERS);
 
-const MOCK_PAGE = join(dirname(fileURLToPath(import.meta.url)), '../../../dev/mock-player/index.html');
+const here = dirname(fileURLToPath(import.meta.url));
+const MOCK_PAGE = join(here, '../../../dev/mock-player/index.html');
+/** Invite links from a room without a title, and the lobby: /join or /join/<roomId>. */
+const JOIN_PAGE = join(here, '../static/join.html');
 
 const server = createServer((req, res) => {
+  if (req.url === '/join' || req.url?.startsWith('/join/')) {
+    res.setHeader('content-type', 'text/html; charset=utf-8');
+    res.end(readFileSync(JOIN_PAGE));
+    return;
+  }
   if (req.url?.startsWith('/mock')) {
     res.setHeader('content-type', 'text/html; charset=utf-8');
     res.end(readFileSync(MOCK_PAGE));

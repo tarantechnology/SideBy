@@ -94,3 +94,21 @@ export function serviceForUrl(url: string): StreamingService | null {
 export function currentService(): StreamingService | null {
   return typeof location === 'undefined' ? null : serviceForHost(location.hostname);
 }
+
+/** A title as the room knows it: service-qualified so any tab can find its way there. */
+export interface ContentRef {
+  serviceId: string;
+  contentId: string;
+}
+
+/** "netflix:70158900" — what the room timeline stores. */
+export function contentKey(serviceId: string, contentId: string): string {
+  return `${serviceId}:${contentId}`;
+}
+
+export function parseContentKey(key: string | null | undefined): ContentRef | null {
+  if (!key) return null;
+  const i = key.indexOf(':');
+  if (i <= 0 || i === key.length - 1) return null;
+  return { serviceId: key.slice(0, i), contentId: key.slice(i + 1) };
+}

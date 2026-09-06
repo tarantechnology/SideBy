@@ -18,16 +18,24 @@ interface Props {
   onJoin: (roomId: string) => void;
   onLeave: () => void;
   onInvite: () => void;
+  /** Take the room's seat back from another of our tabs. */
+  onBringHere: () => void;
+  /** Go to the title the room is watching (from a hangout or another service). */
+  onOpenRoomContent: () => void;
   inviteLink: string | null;
   unavailable: boolean;
   blocked: 'concurrent' | null;
+  /** The seat moved to another tab. */
+  moved: boolean;
+  /** No player on this page: chat only until someone opens a title. */
+  hangout: boolean;
   transportKind: 'local' | 'ws';
   onTransportChange: (kind: 'local' | 'ws') => void;
 }
 
 const IDLE_MS = 3000;
 
-export function App({ adapter, engine, call, bus, onJoin, onLeave, onInvite, inviteLink, unavailable, blocked, transportKind, onTransportChange }: Props) {
+export function App({ adapter, engine, call, bus, onJoin, onLeave, onInvite, onBringHere, onOpenRoomContent, inviteLink, unavailable, blocked, moved, hangout, transportKind, onTransportChange }: Props) {
   const view = useAdapter(adapter);
   const sync = useSync(engine);
   const [cardOpen, setCardOpen] = useState(false);
@@ -63,13 +71,14 @@ export function App({ adapter, engine, call, bus, onJoin, onLeave, onInvite, inv
 
   return (
     <div className="sb-root">
-      <Pill view={view} sync={sync} idle={idle} cardOpen={cardOpen} blocked={blocked} onClick={toggleCard} />
-      {call && sync.roomId && <CameraTile call={call} peerName={sync.peer?.name} />}
+      <Pill view={view} sync={sync} idle={idle} cardOpen={cardOpen} blocked={blocked} moved={moved} hangout={hangout} onClick={toggleCard} />
+      {call && sync.roomId && !moved && <CameraTile call={call} peerName={sync.peer?.name} />}
       {sync.startsInMs > 0 && <Countdown startsInMs={sync.startsInMs} />}
       {cardOpen && (
         <Card
           adapter={adapter} view={view} sync={sync} engine={engine} call={call}
-          inviteLink={inviteLink} unavailable={unavailable} blocked={blocked}
+          inviteLink={inviteLink} unavailable={unavailable} blocked={blocked} moved={moved} hangout={hangout}
+          onBringHere={onBringHere} onOpenRoomContent={onOpenRoomContent}
           advancedOpen={advancedOpen} onToggleAdvanced={() => setAdvancedOpen((v) => !v)}
           onInvite={onInvite} onLeave={onLeave} onJoin={onJoin} onClose={() => setCardOpen(false)}
           transportKind={transportKind} onTransportChange={onTransportChange}
