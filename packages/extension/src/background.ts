@@ -1,53 +1,54 @@
 /**
- * MV3 service worker: toolbar routing and dev-time auto reload.
+ * MV3 service worker: toolbar routing, seat bookkeeping, dev auto reload.
  *
- * The toolbar icon toggles the overlay where it already runs (streaming
- * services, the room server's pages) and injects it into any other tab so
- * a room can start anywhere. Pages that refuse scripts fall back to the
- * server's lobby page.
+ * The toolbar icon toggles the overlay on pages that have one (streaming
+ * services, the room server's pages) and opens the side panel anywhere
+ * else, so a room can start or be joined from any page.
  */
 import { serviceForUrl } from './adapters/services.js';
 
 declare const __DEV__: boolean;
-declare const __SERVER_HTTP__: string;
 
-// Content scripts read the session-scoped room and identity; nothing may be
-// injected before this grant lands or the first storage read would throw.
-const sessionReady: Promise<void> = Promise.resolve(
-  (chrome.storage.session as { setAccessLevel?: (o: { accessLevel: string }) => Promise<void> } | undefined)
-    ?.setAccessLevel?.({ accessLevel: 'TRUSTED_AND_UNTRUSTED_CONTEXTS' }),
-).then(() => undefined, () => undefined);
+// Content scripts read the session-scoped room and identity.
+void (chrome.storage.session as { setAccessLevel?: (o: { accessLevel: string }) => Promise<void> } | undefined)
+  ?.setAccessLevel?.({ accessLevel: 'TRUSTED_AND_UNTRUSTED_CONTEXTS' })
+  .catch(() => undefined);
 
 /** Tabs with a mounted overlay, by their long-lived port. */
 const mounted = new Set<number>();
+/** Which tab currently seats which room, so the panel can defer to it. */
+let seat: { tabId: number; roomId: string } | null = null;
 
 chrome.runtime.onConnect.addListener((port) => {
   const tabId = port.sender?.tab?.id;
-  if (tabId !== undefined) {
-    mounted.add(tabId);
-    port.onDisconnect.addListener(() => mounted.delete(tabId));
+  if (tabId !== undefined) mounted.add(tabId);
+  port.onMessage.addListener((msg: { type?: string; roomId?: string | null }) => {
+    if (msg?.type !== 'seat' || tabId === undefined) return;
+    if (msg.roomId) seat = { tabId, roomId: msg.roomId };
+    else if (seat?.tabId === tabId) seat = null;
+  });
+  port.onDisconnect.addListener(() => {
+    if (tabId !== undefined) mounted.delete(tabId);
+    if (seat?.tabId === tabId) seat = null;
+  });
+});
+
+chrome.runtime.onMessage.addListener((msg: { type?: string; roomId?: string }, _sender, sendResponse) => {
+  if (msg?.type === 'sideby:seat?') {
+    sendResponse({ held: !!seat && seat.roomId === msg.roomId && mounted.has(seat.tabId) });
+    return true;
   }
-  port.onMessage.addListener(() => undefined);
+  return false;
 });
 
 chrome.action.onClicked.addListener(async (tab) => {
   const tabId = tab.id;
   if (tabId === undefined) return;
-  // Already mounted (or should be, on a service page): just toggle the card.
   if (mounted.has(tabId) || (tab.url && serviceForUrl(tab.url))) {
     const delivered = await chrome.tabs.sendMessage(tabId, { type: 'sideby:toggle', open: true }).then(() => true, () => false);
     if (delivered) return;
-    // A service page whose content script is gone (extension reloaded under it): inject below.
   }
-  await sessionReady;
-  try {
-    await chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] });
-    // The content script opens its card on mount when told to; a late toggle is harmless.
-    setTimeout(() => void chrome.tabs.sendMessage(tabId, { type: 'sideby:toggle', open: true }).catch(() => undefined), 300);
-  } catch (err) {
-    console.warn('[sideby] cannot inject here, opening the lobby', err);
-    await chrome.tabs.create({ url: `${__SERVER_HTTP__}/join` });
-  }
+  await chrome.sidePanel.open({ windowId: tab.windowId });
 });
 
 if (__DEV__) {

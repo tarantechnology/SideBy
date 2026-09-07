@@ -45,6 +45,7 @@ const entries = [
   { in: 'src/adapters/hulu/main.ts', out: 'hulu-main' },
   { in: 'src/adapters/mock/main.ts', out: 'mock-main' },
   { in: 'src/content.tsx', out: 'content' },
+  { in: 'src/panel.tsx', out: 'panel' },
   { in: 'src/background.ts', out: 'background' },
 ];
 
@@ -54,6 +55,7 @@ async function copyStatic() {
   const manifest = (await readFile(join(here, 'manifest.json'), 'utf8')).replaceAll('http://localhost:8787/', `${SERVER_HTTP}/`);
   await writeFile(join(dist, 'manifest.json'), manifest);
   await cp(join(here, 'icons'), join(dist, 'icons'), { recursive: true });
+  await cp(join(here, 'src/panel.html'), join(dist, 'panel.html'));
   await writeFile(join(dist, 'build-id.txt'), buildId);
 }
 

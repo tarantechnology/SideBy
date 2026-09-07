@@ -372,3 +372,18 @@
 .sb-input--num { width: 64px; height: 24px; }
 .sb-group__box .sb-log { margin: 0; padding: 6px 10px 8px; border-top: 1px solid var(--sb-border); max-height: 84px; }
 .sb-disclosure { margin-top: 14px; }
+
+/* --------------------------------------------------------------- join */
+.sb-join { display: flex; gap: 6px; width: 100%; margin-top: 10px; }
+.sb-join .sb-input { height: 32px; font-size: 12px; }
+.sb-join .sb-btn--sm { height: 32px; padding: 0 12px; }
+
+/* -------------------------------------------------------------- panel */
+/* The side panel lays the same pieces out in flow: card, then the camera. */
+.sb-root--panel { position: static; display: flex; flex-direction: column; gap: 12px; padding: 12px; min-height: 100vh; }
+.sb-root--panel .sb-card { position: static; width: auto; max-height: none; animation: none; }
+.sb-root--panel .sb-tile {
+  position: relative !important; left: auto !important; top: auto !important;
+  width: 100% !important; height: auto !important; aspect-ratio: 4 / 3; cursor: default; order: -1;
+}
+.sb-root--panel .sb-tile__grip { display: none; }

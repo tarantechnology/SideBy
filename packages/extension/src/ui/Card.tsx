@@ -23,6 +23,8 @@ interface Props {
   moved: boolean;
   /** No player on this page: chat only until someone opens a title. */
   hangout: boolean;
+  /** In the side panel there is nothing to close. */
+  panel: boolean;
   advancedOpen: boolean;
   onToggleAdvanced: () => void;
   onInvite: () => void;
@@ -47,14 +49,16 @@ const SERVICE_NAME = SERVICE?.name ?? 'the service';
  * Advanced folds away diagnostics.
  */
 export function Card(props: Props) {
-  const { view, sync, engine, call, adapter, inviteLink, unavailable, blocked, moved, hangout, advancedOpen, onToggleAdvanced, onInvite, onLeave, onBringHere, onOpenRoomContent, onClose } = props;
+  const { view, sync, engine, call, adapter, inviteLink, unavailable, blocked, moved, hangout, panel, advancedOpen, onToggleAdvanced, onInvite, onLeave, onBringHere, onOpenRoomContent, onClose } = props;
+  const [code, setCode] = useState('');
+  const submitCode = () => { if (code.trim()) { props.onJoin(code); setCode(''); } };
   const inRoom = sync.roomId !== null;
   const hasTitle = !!view.state.contentId;
   return (
     <div className="sb-card sb-material">
       <div className="sb-card__head">
         <span className="sb-card__title">{inRoom ? (hangout ? 'Hanging out' : 'Watching together') : ''}</span>
-        <button className="sb-iconbtn" onClick={onClose} title="Close"><X size={14} /></button>
+        {!panel && <button className="sb-iconbtn" onClick={onClose} title="Close"><X size={14} /></button>}
       </div>
 
       {blocked === 'concurrent' && (
@@ -77,6 +81,10 @@ export function Card(props: Props) {
           <button className="sb-btn sb-btn--primary sb-btn--lg" onClick={onInvite}>
             <Link2 size={14} />Invite a friend
           </button>
+          <div className="sb-join">
+            <input className="sb-input" placeholder="Have a code? Paste it here" value={code} spellCheck={false} onChange={(e) => setCode(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') submitCode(); }} aria-label="Room code" />
+            <button className="sb-btn sb-btn--sm" disabled={!code.trim()} onClick={submitCode}>Join</button>
+          </div>
         </div>
       ) : (
         <RoomBody view={view} sync={sync} engine={engine} call={call} adapter={adapter} inviteLink={inviteLink} unavailable={unavailable} hangout={hangout} onLeave={onLeave} onOpenRoomContent={onOpenRoomContent} />

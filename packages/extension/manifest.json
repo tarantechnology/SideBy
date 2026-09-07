@@ -7,6 +7,9 @@
   "action": {
     "default_title": "Sideby"
   },
+  "side_panel": {
+    "default_path": "panel.html"
+  },
   "icons": {
     "16": "icons/16.png",
     "32": "icons/32.png",
@@ -20,8 +23,7 @@
   "permissions": [
     "storage",
     "alarms",
-    "activeTab",
-    "scripting"
+    "sidePanel"
   ],
   "host_permissions": [
     "https://www.netflix.com/*",
